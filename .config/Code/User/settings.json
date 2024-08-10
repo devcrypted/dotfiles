@@ -1,0 +1,32 @@
+{
+    "workbench.startupEditor": "none",
+    "editor.minimap.enabled": false,
+    "window.menuBarVisibility": "toggle",
+    "workbench.sideBar.location": "right",
+    "workbench.activityBar.location": "hidden",
+    "keyboard.dispatch": "keyCode",
+    "redhat.telemetry.enabled": true,
+    "explorer.confirmDelete": false,
+    "files.autoSave": "afterDelay",
+    "explorer.confirmDragAndDrop": false,
+    "markdown-preview-enhanced.previewTheme": "one-dark.css",
+    "editor.fontFamily": "'JetBrainsMono Nerd Font', 'Droid Sans Mono', 'monospace', monospace",
+    "workbench.colorTheme": "JellyFish",
+    "editor.lineHeight": 1.5,
+    "terminal.integrated.lineHeight": 1.2,
+    "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font'",
+    "terminal.integrated.cursorStyle": "line",
+    "security.workspace.trust.untrustedFiles": "open",
+    "workbench.statusBar.visible": false,
+    "workbench.layoutControl.enabled": false,
+    "vsicons.dontShowNewVersionMessage": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[python]": {
+        "diffEditor.ignoreTrimWhitespace": false,
+        "editor.formatOnType": true,
+        "editor.wordBasedSuggestions": "off",
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnPaste": true,
+        "editor.formatOnSave": true
+    }
+}

@@ -1,0 +1,5 @@
+[user]
+#	email = <your-email-address>
+#	name = <your-name>
+[init]
+	defaultBranch = main

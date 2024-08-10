@@ -68,7 +68,7 @@
           - dotnet-sdk-8.0
           - unar
           - python-is-python3
-          - google-chrome
+          - chromium
         state: present
 
     - name: Change Shell To Zsh

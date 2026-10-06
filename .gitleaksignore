@@ -1,0 +1,6 @@
+# Accepted historical findings (gitleaks fingerprints). Only add a line after the
+# secret is rotated or confirmed dead. New leaks must still fail.
+#
+# 2024-12-26: demo Windows VM admin password in create-azure-vm.sh (since removed;
+# the current script generates a random one). Treat as public and never reuse it.
+e1301bc3ddbdc7522d57e63f76547b0d898dc187:create-azure-vm.sh:generic-api-key:5

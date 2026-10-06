@@ -1,0 +1,85 @@
+# Checks on every `git commit`. ./install.sh installs them (the `hooks` task).
+# Run everything by hand: pre-commit run --all-files
+# A false positive from gitleaks: end the line with `# gitleaks:allow`, or extend .gitleaks.toml.
+repos:
+  # --- Secrets and personal data -------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks # secrets (default rules) + PII rules from .gitleaks.toml
+  - repo: local
+    hooks:
+      - id: forbidden-files
+        name: forbidden files (keys, credentials, local config)
+        language: fail
+        entry: these files must never be committed
+        files: (?i)(^|/)(config\.local\.yaml|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
+      - id: blocked-words
+        name: blocked words (blocked_words in config.local.yaml)
+        language: system
+        entry: python3 -m dotkit.hooks
+        types: [text]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # --- Python ----------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # --- Shell -----------------------------------------------------------------------
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1-1
+    hooks:
+      - id: shellcheck
+        exclude_types: [zsh]
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1
+    hooks:
+      - id: shfmt # style from .editorconfig
+        exclude_types: [zsh]
+  - repo: local
+    hooks:
+      - id: fish-indent
+        name: fish_indent
+        language: system
+        entry: fish_indent --check
+        types: [fish]
+      - id: zsh-syntax
+        name: zsh -n
+        language: system
+        entry: zsh -n
+        types: [zsh]
+
+  # --- Docs ------------------------------------------------------------------------
+  - repo: https://github.com/rvben/rumdl-pre-commit
+    rev: v0.2.78
+    hooks:
+      - id: rumdl # markdownlint rules; config in .markdownlint.yaml
+
+  # --- Tests -----------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: pytest
+        name: unit tests
+        language: python
+        additional_dependencies: [pytest, pyyaml]
+        entry: python -m pytest -q
+        pass_filenames: false
+        files: ^(dotkit/|tests/|home/|config\.yaml|FEATURES\.md)

@@ -1,0 +1,18 @@
+# Small but representative config for the end-to-end test.
+user: {name: Test User, email: test@example.com}
+shells: {default: fish, install: [fish, zsh, bash]}
+modules: [git, nvim, tmux, starship]
+packages: [curl, tmux]
+apt_repos:
+  github-cli:
+    key: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+    url: https://cli.github.com/packages
+    suite: stable
+    packages: [gh]
+tools: {starship: latest, zoxide: latest, eza: latest}
+aliases: {g: git, kgp: kubectl get pods -o wide}
+env: {EDITOR: nvim}
+path: [~/.local/bin]
+mask: [{pattern: "secret[0-9]+"}]
+upgrade: false
+nvidia: {enabled: false}

@@ -1,0 +1,9 @@
+# Machine-local files must never reach test images.
+config.local.yaml
+/.bashrc
+/.zshrc
+/.gitconfig
+/.tmux.conf
+**/__pycache__
+.pytest_cache
+.ruff_cache

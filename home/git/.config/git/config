@@ -1,0 +1,20 @@
+# Shared git settings. Identity and tool-written sections (e.g. `gh auth setup-git`)
+# live in the machine-local ~/.gitconfig, which git reads after this file.
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true
+[fetch]
+	prune = true
+[merge]
+	conflictStyle = zdiff3
+[diff]
+	colorMoved = default
+[rerere]
+	enabled = true
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential

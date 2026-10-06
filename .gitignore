@@ -1,1 +1,10 @@
-ansible/roles/gantsign.oh-my-zsh
+config.local.yaml
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Pre-migration rc files still symlinked from $HOME; delete after ./install.sh
+/.bashrc
+/.zshrc
+/.gitconfig
+/.tmux.conf

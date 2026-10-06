@@ -1,0 +1,8 @@
+# Global gitignore
+.DS_Store
+*.swp
+*~
+.env.local
+.direnv/
+.venv/
+__pycache__/

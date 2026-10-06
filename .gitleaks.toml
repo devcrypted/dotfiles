@@ -1,0 +1,56 @@
+# gitleaks: every default secret rule, plus personal-data (PII) rules for this repo.
+# A false positive: end the line with `# gitleaks:allow`, or add to an allowlist below.
+title = "dotfiles"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "pii-email"
+description = "Email address"
+regex = '''[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'''
+tags = ["pii"]
+[[rules.allowlists]]
+description = "The owner's public commit address, placeholders and service addresses"
+regexes = [
+  '''^kamal2k89@gmail\.com$''',
+  '''@example\.(?:com|org|net)$''',
+  '''@users\.noreply\.github\.com$''',
+  '''^(?:no-?reply|git)@''',
+]
+
+[[rules]]
+id = "pii-public-ip"
+description = "Public IPv4 address"
+regex = '''\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b'''
+tags = ["pii"]
+[[rules.allowlists]]
+description = "Private, loopback, link-local, unspecified and documentation ranges"
+regexes = [
+  '''^(?:10|127|0)\.''',
+  '''^169\.254\.''',
+  '''^192\.168\.''',
+  '''^172\.(?:1[6-9]|2\d|3[01])\.''',
+  '''^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.''',
+  '''^255\.''',
+]
+
+[[rules]]
+id = "pii-uuid"
+description = "UUID (e.g. Azure tenant, subscription or client ID)"
+regex = '''\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'''
+tags = ["pii"]
+[[rules.allowlists]]
+regexes = ['''^0{8}-0{4}-0{4}-0{4}-0{12}$''']
+
+[[rules]]
+id = "pii-phone"
+description = "International phone number"
+regex = '''\+[1-9]\d{0,2}[ .-]?\(?\d{2,5}\)?[ .-]?\d{3,4}[ .-]?\d{3,5}\b'''
+tags = ["pii"]
+
+[[rules]]
+id = "pii-card"
+description = "Payment card number"
+regex = '''\b(?:4\d{3}|5[1-5]\d{2}|2[2-7]\d{2}|3[47]\d{2}|6011)(?:[ -]?\d{4}){2}[ -]?\d{1,4}\b'''
+tags = ["pii"]

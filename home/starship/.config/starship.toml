@@ -1,0 +1,10 @@
+"$schema" = "https://starship.rs/config-schema.json"
+
+add_newline = false
+command_timeout = 1000
+
+[cmd_duration]
+min_time = 2000
+
+[kubernetes]
+disabled = false

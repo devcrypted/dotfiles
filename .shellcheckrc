@@ -1,0 +1,2 @@
+# Sourced files are generated or linked at install time, so they cannot be followed.
+disable=SC1091

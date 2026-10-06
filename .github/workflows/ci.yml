@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: sudo apt-get install -y -qq zsh fish
+      - name: pre-commit (secrets, PII, lint, format, tests)
+        uses: pre-commit/action@v3.0.1
+        with: {extra_args: --all-files}
+      - name: Secrets and PII in the full history
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            git /repo --config /repo/.gitleaks.toml --redact --verbose
+      - name: PowerShell lint
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $issues = Invoke-ScriptAnalyzer -Path windows -Recurse -ExcludeRule PSAvoidUsingWriteHost
+          $issues | Format-Table -AutoSize
+          if ($issues) { exit 1 }
+
+  e2e:
+    needs: checks
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        base: ["ubuntu:24.04", "debian:12"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f tests/e2e/Dockerfile --build-arg BASE=${{ matrix.base }} -t e2e .
+      - run: docker run --rm -e GITHUB_TOKEN=${{ github.token }} e2e

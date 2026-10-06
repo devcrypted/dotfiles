@@ -1,0 +1,3 @@
+# Markdown rules (markdownlint names; used by rumdl in pre-commit).
+MD013: false # line length: prose wraps naturally
+MD033: false # inline HTML

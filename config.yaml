@@ -1,0 +1,106 @@
+# Everything ./install.sh does is driven by this file. Edit it and rerun: only the
+# differences are applied. Machine-specific overrides go in config.local.yaml
+# (gitignored, deep-merged on top; set a key to null there to drop it).
+
+user:
+  name: Kamal Kumar
+  email: kamal2k89@gmail.com
+
+shells:
+  default: fish # login shell
+  install: [fish, zsh, bash] # each one gets its config from home/<shell>/
+
+prompt: starship # starship | builtin (no dependencies; shows path, git branch, exit status)
+
+# Dotfile modules to link from home/<module>/ (shell modules follow shells.install).
+modules: [git, nvim, tmux, starship, kind]
+
+# apt packages from the distro archive. Removing one here does not uninstall it.
+packages:
+  - build-essential
+  - ca-certificates
+  - curl
+  - wget
+  - unzip
+  - git
+  - gh
+  - htop
+  - jq
+  - ripgrep
+  - fd-find
+  - tmux
+  - neovim
+  - python3
+  - python3-pip
+  - python3-venv
+  - libssl-dev
+  - libffi-dev
+  - xclip
+  - wl-clipboard
+
+# Extra apt repositories: {name: {key, url, suite, components, packages}}.
+# url/suite/components may use {distro}, {codename}, {version} and {arch}.
+apt_repos: {}
+
+# Runtimes and CLI tools managed by mise (https://mise.jdx.dev/registry.html).
+# Removing an entry uninstalls it.
+tools:
+  node: lts
+  python: latest
+  uv: latest
+  kubectl: latest
+  kind: latest
+  helm: latest
+  terraform: latest
+  azure: latest # azure-cli
+  powershell: latest # needs libicu (preinstalled on desktop distros)
+  fzf: latest
+  zoxide: latest
+  eza: latest # modern ls (ll, la, lt)
+  bat: latest # cat with syntax highlighting
+  starship: latest
+  # AI coding assistants. Not self-updating: `mise upgrade` refreshes them.
+  claude: latest # Claude Code
+  opencode: latest
+  "npm:cline": latest # Cline CLI (the VS Code extension is separate)
+
+fonts: [JetBrainsMono] # Nerd Fonts for prompt icons (skipped on WSL)
+
+# Aliases become `alias` in bash/zsh and `abbr` in fish.
+aliases:
+  g: git
+  v: nvim
+  vim: nvim
+  k: kubectl
+  h: helm
+  tf: terraform
+  kgp: kubectl get pods -o wide
+  kgn: kubectl get nodes -o wide
+  kga: kubectl get pods -o wide -A
+  projects: cd ~/projects
+  create-cluster: kind create cluster --name kind-main --config ~/.config/kind/cluster.yaml
+  delete-cluster: kind delete cluster --name kind-main
+
+env:
+  EDITOR: nvim
+  VISUAL: nvim
+
+path: [~/.local/bin]
+
+# `mask <command>` pipes output through these sed -E substitutions.
+mask:
+  - pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    replace: "********-****-****-****-************"
+
+upgrade: true # apt full-upgrade on the first run (again: --rerun upgrade)
+docker:
+  enabled: true # an existing docker install (docker.io, Docker Desktop) is kept
+nvidia:
+  enabled: auto # auto = NVIDIA GPU present and not WSL
+  flavor: open # open | proprietary
+  container_toolkit: true # GPU access from Docker containers
+ssh:
+  generate_key: true # ~/.ssh/id_ed25519 if missing
+sudo_nopasswd: true
+pre_commit: true # install this repo's commit checks (secrets, PII, lint)
+# blocked_words: [...]       # words commits may never contain; set in config.local.yaml

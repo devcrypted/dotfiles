@@ -1,0 +1,26 @@
+#!/bin/sh
+# extract FILE...: unpack any common archive format into the current directory.
+set -eu
+[ $# -gt 0 ] || {
+  echo "usage: extract FILE..." >&2
+  exit 2
+}
+for file in "$@"; do
+  case "$file" in
+  *.tar.gz | *.tgz) tar -xzf "$file" ;;
+  *.tar.xz | *.txz) tar -xJf "$file" ;;
+  *.tar.bz2 | *.tbz2) tar -xjf "$file" ;;
+  *.tar.zst) tar --zstd -xf "$file" ;;
+  *.tar) tar -xf "$file" ;;
+  *.zip | *.jar) unzip -q "$file" ;;
+  *.7z) 7z x "$file" ;;
+  *.gz) gunzip -k "$file" ;;
+  *.xz) unxz -k "$file" ;;
+  *.bz2) bunzip2 -k "$file" ;;
+  *.zst) unzstd "$file" ;;
+  *)
+    echo "extract: unsupported format: $file" >&2
+    exit 1
+    ;;
+  esac
+done

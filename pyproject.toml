@@ -1,0 +1,16 @@
+# Tooling config only: dotkit runs straight from the repo via ./install.sh.
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PTH", "C4"]
+ignore = [
+  "PTH123",  # open() is fine
+  "B027",    # Task.commit is an intentional no-op hook
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-q"

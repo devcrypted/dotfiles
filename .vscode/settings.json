@@ -57,6 +57,7 @@
         "robbyrussell",
         "shellcheck",
         "shellenv",
+        "SIGPIPE",
         "sqlitebrowser",
         "tenacityaudio",
         "udpate",

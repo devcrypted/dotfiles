@@ -1,13 +1,56 @@
 #!/usr/bin/env bash
-# tms-runners.sh v2 — any Ubuntu VM -> N self-healing, dockerized GitHub Actions self-hosted runners.
+# tms-runners.sh v2.4 — turn any Ubuntu VM into N self-healing, dockerized GitHub Actions
+# self-hosted runners (org- or repo-level). Works on any cloud or bare metal.
 #
-#   sudo ./tms-runners.sh                      # first run: update+upgrade, install, login, 4 runners
-#   sudo ./tms-runners.sh -n 6                 # converge to 6 (add/remove as needed)
-#   sudo ./tms-runners.sh --org my-org -n 2
-#   sudo ./tms-runners.sh status | logs [N] | heal | down [--purge]
+# ── QUICK START ──────────────────────────────────────────────────────────────────────────
+#   read -rs GH_TOKEN && export GH_TOKEN          # paste token; not stored in shell history
+#   ./tms-runners.sh --org project-tms --labels tms-local,docker -n 2
+#   (no sudo needed — the script elevates itself and keeps your env vars)
 #
-# Idempotent: every step inspects real state and only acts on drift. Safe to rerun at any time,
-# after any failure, or after an SSH drop (the script ignores SIGHUP and resumes on rerun).
+# ── COMMANDS ─────────────────────────────────────────────────────────────────────────────
+#   (none) | up        install everything, log in, converge to N runners   [default]
+#   status             containers + runner state/labels as GitHub sees them
+#   logs [N]           follow logs of runner N (default 1)
+#   heal               restart unhealthy/stopped runner containers now
+#   down [--purge]     deregister + delete ALL runners (do this before deleting the VM)
+#
+# ── COMMON TASKS ─────────────────────────────────────────────────────────────────────────
+#   scale to 6 runners        ./tms-runners.sh -n 6
+#   change labels             ./tms-runners.sh --labels tms-local,docker
+#   cap resources per runner  ./tms-runners.sh --memory 1500m --cpus 1
+#   force OS upgrade          ./tms-runners.sh --upgrade        (only the 1st run upgrades by default)
+#   rebuild image + recreate  ./tms-runners.sh --rebuild        (interrupts running jobs)
+#   repo-level runners        ./tms-runners.sh --repo OWNER/REPO
+#   Settings are saved in /etc/tms-runners.conf, so later runs only need the flags you change.
+#
+# ── ENV VARS / AUTH ──────────────────────────────────────────────────────────────────────
+#   GH_TOKEN or GITHUB_TOKEN   token for GitHub API calls. If unset, the script prints a
+#                              device-login link + code for you to approve in a browser.
+#   --token-file PATH          read the token from a file instead (use with plain `sudo`,
+#                              which strips env vars; or use `sudo -E`).
+#   Token permissions (note: "Actions: Read and write" alone is NOT enough):
+#     fine-grained, org runners : Resource owner = the org, Organization permission
+#                                 "Self-hosted runners" = Read and write
+#     fine-grained, repo runners: Repository permission "Administration" = Read and write
+#     classic                   : scope admin:org (org) or repo (repo)
+#   The token is used only for API calls on this VM — never written to disk, never passed
+#   to containers (they get a one-hour registration token). Pass it again on later runs.
+#
+# ── WHAT A RERUN DOES (idempotent — every step checks real state) ────────────────────────
+#   • Changed --labels / --memory / --cpus / --host-docker / new image: idle runners are
+#     stopped, deregistered from GitHub, deleted (container + volumes) and recreated with the
+#     new settings. A runner that is running a job is skipped and rolled on the next run.
+#   • Lower -n: extra runners are removed + deregistered (busy ones wait for the next run).
+#   • Runner deleted in the GitHub UI: re-registered. Container stopped/unhealthy: restarted
+#     (also every 5 min by a systemd timer).
+#   • Safe after any failure, Ctrl-C or SSH drop — just rerun the same command.
+#
+# ── LABELS ───────────────────────────────────────────────────────────────────────────────
+#   GitHub adds self-hosted, Linux and X64/ARM64 itself. --labels adds yours (default
+#   tms-local,docker). A job runs only if ALL labels in its `runs-on:` exist on the runner,
+#   e.g. `runs-on: tms-local` or `runs-on: [self-hosted, linux, tms-local]`.
+#
+# Log: /var/log/tms-runners/tms-runners.log
 set -Eeuo pipefail
 trap '' HUP
 
@@ -31,7 +74,7 @@ CMD=up
 COUNT=""
 TARGET_KIND=""
 TARGET=""
-LABELS_EXTRA="docker,tms"
+LABELS_EXTRA="tms-local,docker"
 DOCKER_MODE="dind"
 NODE_MAJOR=22
 MEM_LIMIT=""
@@ -57,7 +100,7 @@ Usage: sudo ./tms-runners.sh [up|status|logs [N]|heal|down] [options]
   -n, --count N         number of runners (default 4; rerun with a new N to scale)
       --org ORG         org-level runners (recommended: serve every repo in the org)
       --repo OWNER/REPO repo-level runners
-      --labels a,b      extra runner labels (default: docker,tms)
+      --labels a,b      extra runner labels (default: tms-local,docker)
       --host-docker     share the host Docker daemon instead of per-runner Docker-in-Docker
       --node-major N    Node.js major baked into the runner image (default 22)
       --memory 1500m    per-runner memory limit        --cpus 1.5   per-runner CPU limit
@@ -191,7 +234,7 @@ reg_token() { gh api -X POST "$(api_path)/actions/runners/registration-token" --
 load_gh_runners() {
   GH_OK=0; GH_LIST=""
   if GH_LIST=$(gh api "$(api_path)/actions/runners" --paginate \
-      --jq '.runners[] | [.name, .status, (.busy|tostring)] | @tsv' 2>/dev/null); then GH_OK=1; fi
+      --jq '.runners[] | [.name, .status, (.busy|tostring), ([.labels[].name]|join(","))] | @tsv' 2>/dev/null); then GH_OK=1; fi
 }
 gh_field() { awk -F'\t' -v n="$1" -v f="$2" '$1==n{print $f}' <<<"$GH_LIST"; }
 gh_delete_runner() {
@@ -893,7 +936,7 @@ cmd_status() {
     say ""; say "${B}GitHub (${TARGET_KIND} ${TARGET})${N}"
     load_gh_runners
     if (( GH_OK == 1 )); then
-      awk -F'\t' -v p="${HOST_SHORT}-" 'index($1,p)==1{printf "  %-24s %-8s %s\n",$1,$2,($3=="true"?"busy":"idle")}' <<<"$GH_LIST"
+      awk -F'\t' -v p="${HOST_SHORT}-" 'index($1,p)==1{printf "  %-24s %-8s %-5s labels: %s\n",$1,$2,($3=="true"?"busy":"idle"),$4}' <<<"$GH_LIST"
     else say "  (API call failed)"; fi
   else
     say ""; say "(gh not logged in — GitHub-side status skipped; export GH_TOKEN or run 'up --keep-login')"

@@ -5,17 +5,16 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import tempfile
 from dataclasses import asdict
 from functools import partial
 from pathlib import Path
 
-from ..system import CommandError, fetch, output, run
+from ..system import CommandError, output, run
+from . import cuda
 from .base import Change, Context, Task
 
 TOOLKIT_REPO = "nvidia-container-toolkit"
 TOOLKIT_URL = "https://nvidia.github.io/libnvidia-container"
-CUDA_REPO = "https://developer.download.nvidia.com/compute/cuda/repos/debian{version}/x86_64"
 
 
 class Nvidia(Task):
@@ -36,7 +35,7 @@ class Nvidia(Task):
         return ["software-properties-common", f"linux-headers-{os.uname().release}"]
 
     def fingerprint(self, ctx: Context) -> object:
-        return asdict(ctx.config.nvidia)
+        return {k: v for k, v in asdict(ctx.config.nvidia).items() if k != "cuda"}  # cuda has its own task
 
     def plan(self, ctx: Context) -> list[Change]:
         cfg, changes = ctx.config.nvidia, []
@@ -69,13 +68,7 @@ def _install_ubuntu(ctx: Context) -> None:
 
 
 def _install_debian(ctx: Context) -> None:
-    if ctx.facts.arch != "amd64" or not ctx.facts.version:
-        raise CommandError(["nvidia"], 1, f"no CUDA repo for {ctx.facts.pretty}")
-    repo = CUDA_REPO.format(version=ctx.facts.version)
-    with tempfile.TemporaryDirectory() as tmp:
-        keyring = Path(tmp) / "cuda-keyring.deb"
-        keyring.write_bytes(fetch(f"{repo}/cuda-keyring_1.1-1_all.deb"))
-        run(["dpkg", "-i", str(keyring)], root=True)
+    cuda.add_repo(ctx)
     run(["add-apt-repository", "-y", "contrib"], root=True)
     ctx.apt.update()
     ctx.apt.install(["nvidia-open" if ctx.config.nvidia.flavor == "open" else "cuda-drivers"])

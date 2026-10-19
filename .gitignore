@@ -1,4 +1,5 @@
 config.local.yaml
+profile.yaml
 __pycache__/
 .pytest_cache/
 .ruff_cache/

@@ -1,6 +1,7 @@
 # Features
 
-`./install.sh` runs these tasks top to bottom. Each one checks the system first and
+`./install.sh` runs these tasks top to bottom, for the machine described by
+`config.yaml` plus this machine's profile (see [Machine profile](#machine-profile)). Each one checks the system first and
 changes only what differs from `config.yaml`, so reruns are cheap and safe.
 **One-time** tasks are recorded after they succeed and are skipped on later runs.
 They run again when their config section changes or with `--rerun <task>`.
@@ -16,11 +17,33 @@ They run again when their config section changes or with `--rerun <task>`.
 | `git` | always | Writes `user.name` / `user.email` to the machine-local `~/.gitconfig`. Shared settings are in `~/.config/git/config`. |
 | `hooks` | always | Installs this repo's [pre-commit](https://pre-commit.com) checks (see below) so every clone checks commits. `pre_commit: false` turns it off. |
 | `mise` | always | Installs [mise](https://mise.jdx.dev) and syncs global `tools` (runtimes and CLIs, matching your CPU architecture). Tools removed from config are uninstalled. |
-| `fonts` | always | Installs each Nerd Font in `fonts` to `~/.local/share/fonts`. Skipped on WSL. |
+| `fonts` | always | Installs each Nerd Font in `fonts` to `~/.local/share/fonts`. Skipped on WSL and on servers. |
+| `apps` | always | Installs the `apps` this machine's profile selects that come as a flatpak (Flathub, system-wide), a `.deb` download or an install script. Their `apt`, `apt_repo` and `mise` parts are installed by `packages`, `repos` and `mise`. One app failing is reported at the end and doesn't stop the run. |
 | `docker` | always | Installs Docker Engine (with buildx and compose) from download.docker.com unless a `docker` CLI already exists. If the existing Docker lacks buildx, installs the matching package. Adds you to the `docker` group. |
-| `nvidia` | one-time | When an NVIDIA GPU is present (and not WSL): installs the open or proprietary driver (`ubuntu-drivers` on Ubuntu/Mint, the CUDA repo on Debian), plus `nvidia-container-toolkit` registered with Docker. |
+| `nvidia` | one-time | When the profile says yes to the GPU and an NVIDIA GPU is present (and not WSL): installs the open or proprietary driver (`ubuntu-drivers` on Ubuntu/Mint, the CUDA repo on Debian), plus `nvidia-container-toolkit` registered with Docker when Docker is installed. |
+| `cuda` | always | Same conditions, WSL included, with `nvidia.cuda: true`: installs `cuda-toolkit` from NVIDIA's repo for this release and puts `/usr/local/cuda/bin` on `PATH`. |
 | `ssh` | one-time | Creates `~/.ssh/id_ed25519` if it doesn't exist. |
 | `sudo` | always | `sudo_nopasswd: true` adds a `visudo`-validated `/etc/sudoers.d/90-dotfiles`; switching it back to `false` removes it. |
+
+## Machine profile
+
+The first `./install.sh` (or `plan`) on a machine detects its hardware (RAM, CPUs,
+NVIDIA GPU, desktop session) and asks up to four questions. The answers go into
+`profile.yaml` (gitignored), so they're asked only once:
+
+| Question | Default | Effect |
+| --- | --- | --- |
+| Desktop or server? | desktop when a desktop session or display manager exists (not WSL) | A server gets no `when: [desktop]` apps and no fonts. |
+| NVIDIA driver and CUDA? | yes; not asked without an NVIDIA GPU | `nvidia`, `cuda` and `when: [gpu]` apps. |
+| Docker? | yes on a desktop with 4 GB+ RAM, no on a server | `docker` and `when: [docker]` apps. |
+| Heavy apps? | yes on a desktop with 8 GB+ RAM, no on a server | `when: [heavy]` apps. |
+
+`./install.sh setup` asks again with the saved answers as defaults. Flags answer
+without asking and are saved too: `--role desktop|server`, `--gpu`/`--no-gpu`,
+`--docker`/`--no-docker`, `--heavy`/`--no-heavy`, and `-y` to take the detected
+defaults for anything not given. Without a terminal (CI, cloud-init) the detected
+defaults are used and saved. `config.yaml` can still veto: `docker.enabled: false` or
+`nvidia.enabled: false` wins over a profile that says yes.
 
 ## Shell features (bash, zsh, fish)
 

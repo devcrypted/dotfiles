@@ -11,9 +11,18 @@ is safe to rerun at any time: it changes only what differs from the config.
 ```bash
 git clone https://github.com/devcrypted/dotfiles.git ~/dotfiles
 cd ~/dotfiles
-$EDITOR config.yaml        # shells, packages, tools, aliases, …
-./install.sh plan          # preview: nothing is changed
+$EDITOR config.yaml        # shells, packages, tools, apps, aliases, …
+./install.sh plan          # asks about this machine on the first run, then previews
 ./install.sh               # apply
+```
+
+The first run checks the hardware and asks a few questions: desktop or server, NVIDIA
+driver and CUDA (only if there's an NVIDIA GPU), Docker, and heavy apps. The answers
+are saved in `profile.yaml` (gitignored) and pick which `apps` this machine gets: a
+server gets CLI tools only. For an unattended install, answer with flags:
+
+```bash
+./install.sh --role server --no-docker --no-heavy    # or -y for the detected defaults
 ```
 
 Run it as your normal user, not with `sudo`. It asks for your password when it
@@ -24,6 +33,8 @@ needs root, and a run with nothing to change never asks.
 | `./install.sh` | Apply everything, including pending one-time tasks |
 | `./install.sh plan` | Show every change it would make |
 | `./install.sh status` | One line per task: ok, pending, or done (one-time) |
+| `./install.sh setup` | Answer the machine profile questions again |
+| `./install.sh --role server --no-docker` | Set profile answers without asking (saved) |
 | `./install.sh --no-once` | Routine sync: skip one-time tasks |
 | `./install.sh --once-only` | Only the one-time tasks |
 | `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |

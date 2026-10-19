@@ -8,6 +8,7 @@ configured). Then commit. A new machine is just `git clone` + `./install.sh`.
 
 | I want to… | Change | Notes |
 | --- | --- | --- |
+| Install an application only some machines get (GUI apps, heavy tools) | `apps:` in `config.yaml` | See [Adding an application](#adding-an-application). |
 | Install a CLI tool or language runtime | `tools:` in `config.yaml` | Preferred for most dev tools. Check the [mise registry](https://mise.jdx.dev/registry.html). Removing the line uninstalls it. |
 | Install a system package | `packages:` in `config.yaml` | For things from the distro archive (libraries, daemons, desktop apps). Removing the line does *not* uninstall. |
 | Install from a vendor's apt repo | `apt_repos:` in `config.yaml` | Key URL, repo URL and the packages it provides. See the comment in `config.yaml`. |
@@ -16,6 +17,7 @@ configured). Then commit. A new machine is just `git clone` + `./install.sh`.
 | Add an alias, env var or PATH entry | `aliases:` / `env:` / `path:` in `config.yaml` | Applies to bash, zsh and fish. |
 | Add a shell function or setting | `home/shell/.config/shell/common.sh` (bash+zsh), `home/fish/.config/fish/` (fish) | A shell-specific setting goes in `home/<shell>/`. |
 | Change the login shell or prompt | `shells.default`, `prompt` in `config.yaml` | |
+| Change what this machine is (desktop/server, GPU, Docker, heavy apps) | `./install.sh setup` | Rewrites `profile.yaml` (gitignored). |
 | Change something on one machine only | `config.local.yaml` (gitignored) | Merged over `config.yaml`; `key: null` removes a key. |
 | Add a Windows app | `windows/packages.json` | Then rerun `windows/install.ps1`. |
 | Automate something none of the above covers | A new task in `dotkit/tasks/` | See [Adding a task](#adding-a-task). |
@@ -75,6 +77,45 @@ or re-login (NVIDIA driver, docker group, login shell) are listed at the end.
 Never commit credentials. If a tool mixes settings and secrets in one file, adopt
 only the settings file, or keep the secret part in an untracked file the tool can
 include (many support an `include` directive, like `~/.gitconfig` does here).
+
+## Adding an application
+
+Add an entry under `apps:` in `config.yaml`, then `./install.sh plan` and commit.
+
+```yaml
+apps:
+  <name>:                      # a-z, 0-9 and -
+    when: [desktop, heavy]     # optional; every condition must hold on the machine
+    flatpak: org.example.App   # one or more sources, see below
+```
+
+**`when`** decides which machines get it, from the [machine profile](FEATURES.md#machine-profile):
+
+| Condition | Holds when |
+| --- | --- |
+| `desktop` | the machine is a desktop (use for every GUI app) |
+| `server` | the machine is a server |
+| `heavy` | the user said yes to heavy apps (big downloads, lots of RAM or disk) |
+| `docker` | Docker is installed |
+| `gpu` | an NVIDIA GPU is present and the user said yes to it |
+
+No `when` means every machine.
+
+**Sources.** Pick the first that the app offers. An app may list several, and all of
+them are installed (`podman-desktop` pairs `apt: [podman]` with its flatpak).
+
+| Source | Use when | Example |
+| --- | --- | --- |
+| `apt: [pkg, …]` | The distro archive has it (`apt-cache policy <pkg>`) | `timeshift: {apt: [timeshift]}` |
+| `apt_repo: {key, url, suite, components, packages}` | The vendor has an apt repo, so `apt upgrade` updates it | `brave` |
+| `flatpak: <app id>` | It's on [Flathub](https://flathub.org) (the id is in the page URL) | `bitwarden: {when: [desktop], flatpak: com.bitwarden.desktop}` |
+| `deb: {package, url: {amd64: …, arm64: …}}` | The vendor offers a stable "latest .deb" URL | `vscode` |
+| `script: {command, url}` | Only an install script exists; it runs unless `command` is on `PATH` | `ghostty` |
+| `mise: {tool: version}` | A CLI in the [mise registry](https://mise.jdx.dev/registry.html) that only some machines need | `azure-cli: {when: [heavy], mise: {azure: latest}}` |
+
+CLI tools every machine gets stay in `tools:` / `packages:`. Removing an app stops it
+from being installed on new machines. Only its `mise` tools are uninstalled; apt
+packages, flatpaks and debs stay until you remove them by hand.
 
 ## Adding a task
 

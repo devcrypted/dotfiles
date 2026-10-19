@@ -1,19 +1,20 @@
-"""Command line entry point: ``apply`` (default), ``plan``, ``status`` and ``adopt``."""
+"""Command line entry point: ``apply`` (default), ``plan``, ``status``, ``setup`` and ``adopt``."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from . import system
+from . import onboard, system
 from .adopt import AdoptError, adopt
 from .apt import Apt
-from .config import ConfigError, load
+from .config import Config, ConfigError, load, resolve
 from .state import State, fingerprint
-from .system import CommandError, UnsupportedSystem, detect, sudo
+from .system import CommandError, Facts, UnsupportedSystem, detect, sudo
 from .tasks import TASKS, Context, Task
 
 REPO = Path(__file__).resolve().parent.parent
@@ -36,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, UnsupportedSystem, ValueError) as exc:
         _error(str(exc))
         return 2
+    if args.command == "setup":
+        print("Saved profile.yaml. Preview with ./install.sh plan, apply with ./install.sh")
+        return 0
     try:
         return Runner(ctx, args).run(tasks)
     except KeyboardInterrupt:
@@ -56,9 +60,9 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         "command",
         nargs="?",
         default="apply",
-        choices=("apply", "plan", "status", "adopt"),
+        choices=("apply", "plan", "status", "setup", "adopt"),
         help="apply changes (default), show planned changes, summarise each task, "
-        "or adopt existing config files into the repo",
+        "answer the machine profile questions again, or adopt existing config files into the repo",
     )
     p.add_argument("paths", nargs="*", type=Path, help="adopt: files or directories under $HOME")
     p.add_argument("--module", help="adopt: module name under home/ (default: guessed from the path)")
@@ -70,6 +74,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     once.add_argument("--once-only", action="store_true", help="run only one-time tasks")
     p.add_argument("--rerun", type=_csv, default=[], metavar="TASK,..", help="run one-time tasks again")
     p.add_argument("-v", "--verbose", action="store_true", help="show every command and its output")
+    prof = p.add_argument_group("machine profile (saved to profile.yaml; asked on the first run)")
+    prof.add_argument("--role", choices=("desktop", "server"), help="server: CLI only, no GUI apps or fonts")
+    for name, what in (("gpu", "NVIDIA driver + CUDA"), ("docker", "Docker Engine"), ("heavy", "heavy apps")):
+        prof.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, help=what)
+    prof.add_argument("-y", "--yes", action="store_true", help="don't ask: use detected defaults")
     return p.parse_args(argv)
 
 
@@ -94,11 +103,13 @@ def _csv(value: str) -> list[str]:
 def _context(args: argparse.Namespace) -> Context:
     config_path = (args.config or REPO / "config.yaml").resolve()
     overlay = config_path.with_name(f"{config_path.stem}.local.yaml")
-    config = load(config_path, overlay, home_dir=REPO / "home")
+    profile_path = config_path.with_name("profile.yaml")
+    config = load(config_path, overlay, home_dir=REPO / "home", profile=profile_path)
     facts = detect()
+    config = _profile(args, config, facts, profile_path)
     home = Path.home()
     return Context(
-        config=config,
+        config=resolve(config, nvidia_gpu=facts.nvidia_gpu),
         facts=facts,
         repo=REPO,
         home=home,
@@ -106,6 +117,24 @@ def _context(args: argparse.Namespace) -> Context:
         run_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
         apt=Apt(facts),
     )
+
+
+def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path) -> Config:
+    """Make sure the config has a machine profile, asking for one on the first run."""
+    given = {k: getattr(args, k) for k in ("role", "gpu", "docker", "heavy") if getattr(args, k) is not None}
+    fresh = config.profile is None
+    if not (fresh or given or args.command == "setup"):
+        return config
+    if fresh and args.command == "status":
+        print(f"note: no {path.name} yet; showing detected defaults (./install.sh setup to choose)")
+        return replace(config, profile=onboard.onboard(config, facts, given=given, tty=None))
+    asking = args.command == "setup" or (fresh and args.command in ("apply", "plan"))
+    tty = onboard.terminal() if asking and not args.yes else None
+    profile = onboard.onboard(config, facts, given=given, tty=tty)
+    onboard.save(path, profile)
+    if tty is None and fresh:
+        print(f"note: wrote {path.name} from detected defaults; edit it or run ./install.sh setup")
+    return replace(config, profile=profile)
 
 
 def _select(args: argparse.Namespace) -> list[Task]:
@@ -134,6 +163,10 @@ class Runner:
             f"{s} (default)" if s == ctx.config.shells.default else s for s in ctx.config.shells.install
         )
         print(self._paint("1", f"dotfiles {self.command}") + f"  {ctx.facts.pretty} · {shells}")
+        if ctx.config.profile:
+            p = ctx.config.profile
+            extras = [name for name in ("gpu", "docker", "heavy") if getattr(p, name)]
+            print(self._paint("2", f"  profile: {p.role}{''.join(f' +{e}' for e in extras)} (profile.yaml)"))
 
         changed = unchanged = 0
         for task in tasks:

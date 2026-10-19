@@ -9,6 +9,10 @@ apt_repos:
     url: https://cli.github.com/packages
     suite: stable
     packages: [gh]
+apps:
+  tree: {apt: [tree]}
+  cowsay: {when: [desktop], apt: [cowsay]} # this is a server: must not be installed
+profile: {role: server, gpu: false, docker: false, heavy: false}
 tools: {starship: latest, zoxide: latest, eza: latest}
 aliases: {g: git, kgp: kubectl get pods -o wide}
 env: {EDITOR: nvim}

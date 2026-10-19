@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from .apps import Apps
 from .base import Change, Context, Task
+from .cuda import Cuda
 from .docker import Docker
 from .fonts import Fonts
 from .git import Git
@@ -29,8 +31,10 @@ TASKS: tuple[Task, ...] = (
     Hooks(),  # after git: commits need an identity
     Mise(),
     Fonts(),
+    Apps(),
     Docker(),
     Nvidia(),  # after docker: the container toolkit registers itself with Docker
+    Cuda(),  # after nvidia: on Debian both use NVIDIA's CUDA repo
     Ssh(),
     Sudo(),
 )

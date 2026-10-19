@@ -177,13 +177,48 @@ def parse_os_release(text: str) -> dict[str, str]:
 
 
 def has_nvidia_gpu(pci: Path = Path("/sys/bus/pci/devices")) -> bool:
-    """True when a PCI display controller (class 0x03xxxx) from NVIDIA (0x10de) exists."""
+    """True when a PCI display controller (class 0x03xxxx) from NVIDIA (0x10de) exists.
+
+    WSL exposes no PCI devices; there the Windows driver ships nvidia-smi into the guest.
+    """
+    if Path("/usr/lib/wsl/lib/nvidia-smi").exists():
+        return True
     if not pci.is_dir():
         return False
     return any(
         _read(dev / "vendor").strip() == "0x10de" and _read(dev / "class").startswith("0x03")
         for dev in pci.iterdir()
     )
+
+
+def gpu_name() -> str:
+    """Marketing name of the NVIDIA GPU, e.g. "NVIDIA GeForce RTX 3060", when a tool knows it."""
+    name = output(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"]).strip().splitlines()
+    if name:
+        return name[0]
+    for line in output(["lspci", "-mm"]).splitlines():
+        fields = shlex.split(line)
+        if len(fields) > 3 and "NVIDIA" in fields[2] and ("VGA" in fields[1] or "3D" in fields[1]):
+            return f"NVIDIA {fields[3]}"
+    return "NVIDIA GPU"
+
+
+def ram_gb(meminfo: Path = Path("/proc/meminfo")) -> int:
+    """Total RAM in GiB, rounded (0 when unknown)."""
+    for line in _read(meminfo).splitlines():
+        if line.startswith("MemTotal:"):
+            return round(int(line.split()[1]) / 1024**2)
+    return 0
+
+
+def has_desktop() -> bool:
+    """True when a graphical session is running or a display manager is installed."""
+    if any(os.environ.get(v) for v in ("XDG_CURRENT_DESKTOP", "WAYLAND_DISPLAY", "DISPLAY")):
+        return True
+    if Path("/etc/systemd/system/display-manager.service").exists():
+        return True
+    sessions = (Path("/usr/share/xsessions"), Path("/usr/share/wayland-sessions"))
+    return any(d.is_dir() and any(d.iterdir()) for d in sessions)
 
 
 def _read(path: str | Path) -> str:

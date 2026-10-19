@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import types
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
@@ -22,6 +22,10 @@ SHELL_MODULES = frozenset({"fish", "zsh", "bash", "shell"})
 _ALIAS_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _REPO_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+# Conditions an app's `when` may list; each one is a profile answer (see Profile).
+Condition = Literal["desktop", "server", "heavy", "docker", "gpu"]
+CUDA_PATH = "/usr/local/cuda/bin"
 
 
 class ConfigError(Exception):
@@ -65,6 +69,43 @@ class Nvidia:
     enabled: bool | Literal["auto"] = "auto"
     flavor: Literal["open", "proprietary"] = "open"
     container_toolkit: bool = False
+    cuda: bool = False
+
+
+@dataclass(frozen=True)
+class Profile:
+    """Per-machine answers from onboarding, saved in profile.yaml (gitignored)."""
+
+    role: Literal["desktop", "server"] = "desktop"
+    gpu: bool = True  # NVIDIA driver + CUDA, only when such a GPU is present
+    docker: bool = True
+    heavy: bool = True  # apps marked `when: [heavy]`
+
+
+@dataclass(frozen=True)
+class Deb:
+    package: str  # installed package name, used to check whether it is there
+    url: dict[str, str] = field(default_factory=dict)  # dpkg arch -> download URL
+
+
+@dataclass(frozen=True)
+class Script:
+    command: str  # skip the script when this command is already on PATH
+    url: str
+
+
+@dataclass(frozen=True)
+class App:
+    """One installable application. Every source given is used, so an app can pair
+    an apt package with a flatpak (e.g. podman + Podman Desktop)."""
+
+    when: tuple[Condition, ...] = ()
+    apt: tuple[str, ...] = ()
+    apt_repo: AptRepo | None = None
+    flatpak: str = ""
+    deb: Deb | None = None
+    script: Script | None = None
+    mise: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -93,6 +134,8 @@ class Config:
     sudo_nopasswd: bool = False
     pre_commit: bool = True
     blocked_words: tuple[str, ...] = ()
+    apps: dict[str, App] = field(default_factory=dict)
+    profile: Profile | None = None
 
     @property
     def enabled_modules(self) -> tuple[str, ...]:
@@ -100,23 +143,76 @@ class Config:
         return (*self.shells.install, "shell", *self.modules)
 
 
-def load(base: Path, overlay: Path | None = None, *, home_dir: Path | None = None) -> Config:
-    """Read ``base``, deep-merge ``overlay`` when it exists, and validate the result.
+def load(
+    base: Path,
+    overlay: Path | None = None,
+    *,
+    home_dir: Path | None = None,
+    profile: Path | None = None,
+) -> Config:
+    """Read ``base``, deep-merge ``profile`` and then ``overlay`` when they exist, and
+    validate the result.
 
     ``home_dir`` is the repo's ``home/`` directory; when given, module names are
     checked against it.
     """
     data = _read(base)
     sources = [base.name]
-    if overlay is not None and overlay.exists():
-        data = merge(data, _read(overlay))
-        sources.append(overlay.name)
+    for extra in (profile, overlay):
+        if extra is not None and extra.exists():
+            data = merge(data, _read(extra))
+            sources.append(extra.name)
     try:
         config = _convert(Config, data, "")
         _check(config, home_dir)
     except ConfigError as exc:
         raise ConfigError(f"{' + '.join(sources)}: {exc}") from None
     return config
+
+
+def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
+    """Apply the machine profile: keep only the apps whose `when` holds and fold their
+    apt packages, apt repos and mise tools into the matching top-level sections.
+
+    config.yaml says what is allowed on any machine; the profile narrows it, so
+    `docker.enabled: false` there still wins over a profile that wants Docker.
+    """
+    profile = config.profile or Profile()
+    gpu = profile.gpu and nvidia_gpu and config.nvidia.enabled is not False
+    docker = config.docker.enabled and profile.docker
+    holds = {
+        "desktop": profile.role == "desktop",
+        "server": profile.role == "server",
+        "heavy": profile.heavy,
+        "docker": docker,
+        "gpu": gpu,
+    }
+    apps = {name: app for name, app in config.apps.items() if all(holds[c] for c in app.when)}
+    packages = list(config.packages)
+    repos, tools = dict(config.apt_repos), dict(config.tools)
+    for name, app in apps.items():
+        packages += app.apt
+        if app.apt_repo:
+            repos[name] = app.apt_repo
+        tools.update(app.mise)
+    cuda = gpu and config.nvidia.cuda
+    return replace(
+        config,
+        apps=apps,
+        packages=tuple(dict.fromkeys(packages)),
+        apt_repos=repos,
+        tools=tools,
+        # Servers are reached over SSH: fonts belong on the client's terminal.
+        fonts=config.fonts if holds["desktop"] else (),
+        docker=replace(config.docker, enabled=docker),
+        nvidia=replace(
+            config.nvidia,
+            enabled=config.nvidia.enabled if profile.gpu else False,
+            container_toolkit=config.nvidia.container_toolkit and docker,
+            cuda=cuda,
+        ),
+        path=(*config.path, CUDA_PATH) if cuda and CUDA_PATH not in config.path else config.path,
+    )
 
 
 def merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
@@ -176,6 +272,9 @@ def _convert(tp: Any, value: Any, where: str) -> Any:
         raise _type_error(where, " | ".join(map(str, allowed)), value)
 
     if origin in (Union, types.UnionType):
+        others = [a for a in get_args(tp) if a is not type(None)]
+        if value is not None and len(others) == 1:  # `X | None`: report X's own error
+            return _convert(others[0], value, where)
         for arg in get_args(tp):
             try:
                 return _convert(arg, value, where)
@@ -197,6 +296,11 @@ def _convert(tp: Any, value: Any, where: str) -> Any:
             _convert(key_type, k, where): _convert(value_type, v, _join(where, str(k)))
             for k, v in value.items()
         }
+
+    if tp is type(None):
+        if value is None:
+            return None
+        raise _type_error(where, "null", value)
 
     if tp is bool:
         if isinstance(value, bool):
@@ -240,6 +344,22 @@ def _check(config: Config, home_dir: Path | None) -> None:
             raise ConfigError(f"apt_repos: invalid name {name!r} (use a-z, 0-9 and -)")
         if not repo.packages:
             raise ConfigError(f"apt_repos.{name}.packages: list at least one package")
+
+    for name, app in config.apps.items():
+        where = f"apps.{name}"
+        if not _REPO_NAME.match(name):
+            raise ConfigError(f"apps: invalid name {name!r} (use a-z, 0-9 and -)")
+        if not (app.apt or app.apt_repo or app.flatpak or app.deb or app.script or app.mise):
+            raise ConfigError(f"{where}: give at least one of apt, apt_repo, flatpak, deb, script, mise")
+        if app.apt_repo and not app.apt_repo.packages:
+            raise ConfigError(f"{where}.apt_repo.packages: list at least one package")
+        if app.apt_repo and name in config.apt_repos:
+            raise ConfigError(f"{where}: apt_repos.{name} already exists; rename one of them")
+        if app.deb and not app.deb.url:
+            raise ConfigError(f"{where}.deb.url: map at least one architecture to a URL")
+        clash = sorted(app.mise.keys() & config.tools.keys())
+        if clash:
+            raise ConfigError(f"{where}.mise: {', '.join(clash)} is also in tools; keep one")
 
 
 def _join(where: str, key: str) -> str:

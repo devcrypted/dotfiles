@@ -1,6 +1,10 @@
 # Everything ./install.sh does is driven by this file. Edit it and rerun: only the
 # differences are applied. Machine-specific overrides go in config.local.yaml
 # (gitignored, deep-merged on top; set a key to null there to drop it).
+#
+# Each machine also has a profile.yaml (gitignored), written by the questions asked on
+# the first run: desktop or server, NVIDIA GPU, Docker, heavy apps. It decides which
+# `apps` below apply. `./install.sh setup` asks again.
 
 user:
   name: Kamal Kumar
@@ -15,7 +19,8 @@ prompt: starship # starship | builtin (no dependencies; shows path, git branch, 
 # Dotfile modules to link from home/<module>/ (shell modules follow shells.install).
 modules: [git, nvim, tmux, starship, kind]
 
-# apt packages from the distro archive. Removing one here does not uninstall it.
+# apt packages from the distro archive, on every machine (desktop apps go in `apps`).
+# Removing one here does not uninstall it.
 packages:
   - build-essential
   - ca-certificates
@@ -35,8 +40,6 @@ packages:
   - python3-venv
   - libssl-dev
   - libffi-dev
-  - xclip
-  - wl-clipboard
 
 # Extra apt repositories: {name: {key, url, suite, components, packages}}.
 # url/suite/components may use {distro}, {codename}, {version} and {arch}.
@@ -52,8 +55,6 @@ tools:
   kind: latest
   helm: latest
   terraform: latest
-  azure: latest # azure-cli
-  powershell: latest # needs libicu (preinstalled on desktop distros)
   fzf: latest
   zoxide: latest
   eza: latest # modern ls (ll, la, lt)
@@ -64,7 +65,50 @@ tools:
   opencode: latest
   "npm:cline": latest # Cline CLI (the VS Code extension is separate)
 
-fonts: [JetBrainsMono] # Nerd Fonts for prompt icons (skipped on WSL)
+# Applications that only some machines get. `when` lists profile answers that must all
+# hold: desktop | server | heavy | docker | gpu (no `when`: every machine). An app may
+# use several sources; all of them are installed:
+#   apt: [pkg, ...]              distro packages
+#   apt_repo: {key, url, suite, components, packages}   a vendor repo (as in apt_repos)
+#   flatpak: <Flathub app id>    see flathub.org; installed system-wide
+#   deb: {package, url: {amd64: <url>, arm64: <url>}}   a .deb download
+#   script: {command, url}       an install script, run unless `command` is on PATH
+#   mise: {tool: version}        like `tools`
+# Removing an app stops installing it; only its mise tools are uninstalled.
+# How-to and examples: MANAGING.md#adding-an-application
+apps:
+  timeshift: {apt: [timeshift]} # system snapshots: `sudo timeshift --create`
+  clipboard: {when: [desktop], apt: [xclip, wl-clipboard]}
+  nvtop: {when: [gpu], apt: [nvtop]} # GPU monitor
+  brave:
+    when: [desktop]
+    apt_repo:
+      key: https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+      url: https://brave-browser-apt-release.s3.brave.com/
+      suite: stable
+      packages: [brave-browser]
+  vscode: # its package adds Microsoft's apt repo, so apt keeps it updated
+    when: [desktop]
+    deb:
+      package: code
+      url:
+        amd64: https://update.code.visualstudio.com/latest/linux-deb-x64/stable
+        arm64: https://update.code.visualstudio.com/latest/linux-deb-arm64/stable
+  ghostty: # terminal; .deb builds for Ubuntu 24.04+/Mint 22+/Debian 13+
+    when: [desktop]
+    script:
+      command: ghostty
+      url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh
+  bitwarden: {when: [desktop], flatpak: com.bitwarden.desktop}
+  whatsie: {when: [desktop], flatpak: com.ktechpit.whatsie} # WhatsApp client
+  podman-desktop:
+    when: [desktop, heavy]
+    apt: [podman]
+    flatpak: io.podman_desktop.PodmanDesktop
+  powershell: {when: [heavy], mise: {powershell: latest}} # needs libicu
+  azure-cli: {when: [heavy], mise: {azure: latest}}
+
+fonts: [JetBrainsMono] # Nerd Fonts for prompt icons (skipped on WSL and servers)
 
 # Aliases become `alias` in bash/zsh and `abbr` in fish.
 aliases:
@@ -93,12 +137,14 @@ mask:
     replace: "********-****-****-****-************"
 
 upgrade: true # apt full-upgrade on the first run (again: --rerun upgrade)
+# docker and nvidia also need a "yes" in the machine's profile; `false` here vetoes them.
 docker:
   enabled: true # an existing docker install (docker.io, Docker Desktop) is kept
 nvidia:
-  enabled: auto # auto = NVIDIA GPU present and not WSL
+  enabled: auto # auto = NVIDIA GPU present and not WSL (WSL uses the Windows driver)
   flavor: open # open | proprietary
-  container_toolkit: true # GPU access from Docker containers
+  container_toolkit: true # GPU access from Docker containers (when Docker is installed)
+  cuda: true # CUDA toolkit from NVIDIA's repo (on WSL too)
 ssh:
   generate_key: true # ~/.ssh/id_ed25519 if missing
 sudo_nopasswd: true

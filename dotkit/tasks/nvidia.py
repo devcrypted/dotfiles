@@ -77,8 +77,7 @@ def _install_debian(ctx: Context) -> None:
 
 def _install_toolkit(ctx: Context) -> None:
     line = ctx.apt.source_line(TOOLKIT_REPO, f"{TOOLKIT_URL}/stable/deb/{{arch}}", "/")
-    if not ctx.apt.repo_current(TOOLKIT_REPO, line):
-        ctx.apt.add_repo(TOOLKIT_REPO, f"{TOOLKIT_URL}/gpgkey", line)
+    ctx.apt.ensure_repo(TOOLKIT_REPO, f"{TOOLKIT_URL}/gpgkey", line)
     ctx.apt.install(["nvidia-container-toolkit"])
 
 

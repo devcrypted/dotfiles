@@ -16,8 +16,10 @@ repos:
         files: (?i)(^|/)(config\.local\.yaml|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
       - id: blocked-words
         name: blocked words (blocked_words in config.local.yaml)
-        language: system
-        entry: python3 -m dotkit.hooks
+        # Own venv: `python3` on PATH may be a mise/pyenv build without PyYAML.
+        language: python
+        additional_dependencies: [pyyaml]
+        entry: python -m dotkit.hooks
         types: [text]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

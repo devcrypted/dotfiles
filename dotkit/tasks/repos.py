@@ -16,6 +16,10 @@ class Repos(Task):
 
     def plan(self, ctx: Context) -> list[Change]:
         apt, changes = ctx.apt, []
+        duplicates = apt.duplicates()
+        for name, other in duplicates.items():
+            summary = f"remove apt repo {name}: {other} already provides it"
+            changes.append(Change(summary, partial(apt.remove_repo, name)))
         for name, repo in ctx.config.apt_repos.items():
             line = apt.source_line(name, repo.url, repo.suite, repo.components)
             if not apt.repo_current(name, line):
@@ -26,7 +30,9 @@ class Repos(Task):
                 changes.append(Change(summary, partial(apt.install, missing)))
         # Repos we added earlier but that were removed from the config. Their packages
         # stay installed: removing software is a decision to make by hand.
-        for name in sorted(set(ctx.state.get("apt_repos", [])) - ctx.config.apt_repos.keys()):
+        for name in sorted(
+            set(ctx.state.get("apt_repos", [])) - ctx.config.apt_repos.keys() - duplicates.keys()
+        ):
             changes.append(Change(f"remove apt repo {name}", partial(apt.remove_repo, name)))
         return changes
 

@@ -132,30 +132,58 @@ rm -f "$STATE"/run.* 2>/dev/null || true
 
 # ---- UI helpers -------------------------------------------------------------
 if [[ -t 1 ]]; then
-  B=$'\033[1m'; D=$'\033[2m'; R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; N=$'\033[0m'
+  B=$'\033[1m'
+  D=$'\033[2m'
+  R=$'\033[31m'
+  G=$'\033[32m'
+  Y=$'\033[33m'
+  N=$'\033[0m'
 else
-  B=''; D=''; R=''; G=''; Y=''; N=''
+  B=''
+  D=''
+  R=''
+  G=''
+  Y=''
+  N=''
 fi
-say()  { printf '%s\n' "$*" 2>/dev/null || true; }
+say() { printf '%s\n' "$*" 2>/dev/null || true; }
 fmt_t() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
 logf() { printf '[%s] %s\n' "$(date -Is)" "$*" >>"$LOG" 2>/dev/null || true; }
 step() {
-  STEP_N=$((STEP_N + 1)); STEP_T0=$SECONDS
-  say ""; say "${B}[${STEP_N}/${TOTAL}] $1${N}"; logf "STEP ${STEP_N}/${TOTAL}: $1"
+  STEP_N=$((STEP_N + 1))
+  STEP_T0=$SECONDS
+  say ""
+  say "${B}[${STEP_N}/${TOTAL}] $1${N}"
+  logf "STEP ${STEP_N}/${TOTAL}: $1"
 }
-ok()   { say "   ${G}✔${N} $* ${D}($(fmt_t $((SECONDS - STEP_T0))))${N}"; logf "ok: $*"; }
-skip() { say "   ${D}• $* — nothing to do${N}"; logf "skip: $*"; }
-info() { say "   $*"; logf "info: $*"; }
-warn() { say "   ${Y}! $*${N}"; logf "WARN: $*"; }
+ok() {
+  say "   ${G}✔${N} $* ${D}($(fmt_t $((SECONDS - STEP_T0))))${N}"
+  logf "ok: $*"
+}
+skip() {
+  say "   ${D}• $* — nothing to do${N}"
+  logf "skip: $*"
+}
+info() {
+  say "   $*"
+  logf "info: $*"
+}
+warn() {
+  say "   ${Y}! $*${N}"
+  logf "WARN: $*"
+}
 die() {
-  say ""; say "${R}✘ ERROR:${N} $*"
+  say ""
+  say "${R}✘ ERROR:${N} $*"
   say "${D}  Log: ${LOG}${N}"
   say "${D}  Fix the cause (or just wait a minute) and rerun the same command — it resumes where it stopped.${N}"
-  logf "ERROR: $*"; exit 1
+  logf "ERROR: $*"
+  exit 1
 }
 trap 'die "unexpected failure at line $LINENO: $BASH_COMMAND"' ERR
 
 _run_once() {
+  # shellcheck disable=SC1003 # a literal backslash, not an escape
   local start=$SECONDS pid rc=0 i=0 line cols spin_last=$SECONDS frames='|/-\'
   RUN_OUT=$(mktemp "$STATE/run.XXXXXX")
   logf "\$ $*"
@@ -166,10 +194,12 @@ _run_once() {
     line=$(tail -c 600 "$RUN_OUT" 2>/dev/null | tr '\r' '\n' | tr -d '\000-\010\013-\037' | grep -v '^[[:space:]]*$' | tail -n1 | cut -c1-$((cols - 18)) || true)
     if [[ -t 1 ]]; then
       printf '\r\033[K   %s %s  %s%s%s' "${frames:i%4:1}" "$(fmt_t $((SECONDS - start)))" "$D" "$line" "$N" 2>/dev/null || true
-    elif (( SECONDS - spin_last >= 30 )); then
-      say "   … $(fmt_t $((SECONDS - start))) $line"; spin_last=$SECONDS
+    elif ((SECONDS - spin_last >= 30)); then
+      say "   … $(fmt_t $((SECONDS - start))) $line"
+      spin_last=$SECONDS
     fi
-    i=$((i + 1)); sleep 0.25
+    i=$((i + 1))
+    sleep 0.25
   done
   wait "$pid" || rc=$?
   if [[ -t 1 ]]; then printf '\r\033[K' 2>/dev/null || true; fi
@@ -180,8 +210,11 @@ _run_once() {
 run() {
   local tries=${RETRIES:-1} attempt=1 rc=0
   while :; do
-    if _run_once "$@"; then rm -f "$RUN_OUT"; return 0; else rc=$?; fi
-    if (( attempt >= tries )); then
+    if _run_once "$@"; then
+      rm -f "$RUN_OUT"
+      return 0
+    else rc=$?; fi
+    if ((attempt >= tries)); then
       say "   ${R}✘ failed (exit $rc): $*${N}"
       say "   ${D}--- last output ---${N}"
       { tail -n 25 "$RUN_OUT" 2>/dev/null | sed 's/^/   | /'; } || true
@@ -198,21 +231,29 @@ write_file() { # write_file <path> <mode> < content   → 0 if changed, 1 if ide
   local path=$1 mode=${2:-644} tmp
   tmp=$(mktemp)
   cat >"$tmp"
-  if [[ -f $path ]] && cmp -s "$tmp" "$path"; then rm -f "$tmp"; return 1; fi
-  install -m "$mode" "$tmp" "$path"; rm -f "$tmp"; return 0
+  if [[ -f $path ]] && cmp -s "$tmp" "$path"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  install -m "$mode" "$tmp" "$path"
+  rm -f "$tmp"
+  return 0
 }
 
 # ---- apt helpers ------------------------------------------------------------
 wait_apt() {
   local end=$((SECONDS + 1200)) warned=0
   local locks=(/var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock)
-  while (( SECONDS < end )); do
+  while ((SECONDS < end)); do
     if command -v fuser >/dev/null; then
       fuser "${locks[@]}" >/dev/null 2>&1 || return 0
     else
       pgrep -x 'apt|apt-get|dpkg|unattended-upgr' >/dev/null || return 0
     fi
-    if (( warned == 0 )); then echo "waiting for another apt/dpkg process (boot-time updates) to finish…"; warned=1; fi
+    if ((warned == 0)); then
+      echo "waiting for another apt/dpkg process (boot-time updates) to finish…"
+      warned=1
+    fi
     sleep 5
   done
   echo "apt/dpkg lock still held after 20 min — inspect: ps aux | grep -E 'apt|dpkg|unattended'"
@@ -232,9 +273,10 @@ free_gb() { df -BG --output=avail / | tail -1 | tr -dc 0-9; }
 api_path() { if [[ $TARGET_KIND == org ]]; then echo "orgs/$TARGET"; else echo "repos/$TARGET"; fi; }
 reg_token() { gh api -X POST "$(api_path)/actions/runners/registration-token" --jq .token; }
 load_gh_runners() {
-  GH_OK=0; GH_LIST=""
+  GH_OK=0
+  GH_LIST=""
   if GH_LIST=$(gh api "$(api_path)/actions/runners" --paginate \
-      --jq '.runners[] | [.name, .status, (.busy|tostring), ([.labels[].name]|join(","))] | @tsv' 2>/dev/null); then GH_OK=1; fi
+    --jq '.runners[] | [.name, .status, (.busy|tostring), ([.labels[].name]|join(","))] | @tsv' 2>/dev/null); then GH_OK=1; fi
 }
 gh_field() { awk -F'\t' -v n="$1" -v f="$2" '$1==n{print $f}' <<<"$GH_LIST"; }
 gh_delete_runner() {
@@ -246,28 +288,32 @@ has_env_token() { [[ -n ${GH_TOKEN:-}${GITHUB_TOKEN:-} ]]; }
 token_kind() {
   case ${GH_TOKEN:-${GITHUB_TOKEN:-}} in
     github_pat_*) echo fine-grained ;;
-    ghp_*)        echo classic ;;
-    ghs_*)        echo app ;;
-    gho_*|ghu_*)  echo oauth ;;
-    '')           echo none ;;
-    *)            echo unknown ;;
+    ghp_*) echo classic ;;
+    ghs_*) echo app ;;
+    gho_* | ghu_*) echo oauth ;;
+    '') echo none ;;
+    *) echo unknown ;;
   esac
 }
 PROBE_ERR=""
 probe_access() { # can this token mint a runner registration token for the target?
   local out
-  if out=$(gh api -X POST "$(api_path)/actions/runners/registration-token" --jq .token 2>&1); then PROBE_ERR=""; return 0; fi
-  PROBE_ERR=$out; return 1
+  if out=$(gh api -X POST "$(api_path)/actions/runners/registration-token" --jq .token 2>&1); then
+    PROBE_ERR=""
+    return 0
+  fi
+  PROBE_ERR=$out
+  return 1
 }
 access_hint() {
   say "   GitHub answered: ${PROBE_ERR:-(no message)}"
   case "$(token_kind):${TARGET_KIND}" in
-    fine-grained:org)  say "   → Fine-grained PAT: Resource owner must be '${TARGET}' (org must allow fine-grained PATs and approve the token); Organization permission 'Self-hosted runners' = Read and write." ;;
+    fine-grained:org) say "   → Fine-grained PAT: Resource owner must be '${TARGET}' (org must allow fine-grained PATs and approve the token); Organization permission 'Self-hosted runners' = Read and write." ;;
     fine-grained:repo) say "   → Fine-grained PAT: Repository access must include ${TARGET}; Repository permission 'Administration' = Read and write." ;;
-    classic:org)       say "   → Classic PAT: scope admin:org (plus repo if the org has private repos). If the org uses SAML SSO, authorize the token for it." ;;
-    classic:repo)      say "   → Classic PAT: scope repo, and the token's user must be admin of ${TARGET}. Authorize for SSO if required." ;;
-    app:*)             say "   → GitHub App installation token: needs 'Self-hosted runners' (org) or 'Administration' (repo) = write." ;;
-    *)                 say "   → The token's user must be an admin of the ${TARGET_KIND}; org runners need admin:org / 'Self-hosted runners' write." ;;
+    classic:org) say "   → Classic PAT: scope admin:org (plus repo if the org has private repos). If the org uses SAML SSO, authorize the token for it." ;;
+    classic:repo) say "   → Classic PAT: scope repo, and the token's user must be admin of ${TARGET}. Authorize for SSO if required." ;;
+    app:*) say "   → GitHub App installation token: needs 'Self-hosted runners' (org) or 'Administration' (repo) = write." ;;
+    *) say "   → The token's user must be an admin of the ${TARGET_KIND}; org runners need admin:org / 'Self-hosted runners' write." ;;
   esac
   say "   → 'Actions: Read and write' alone is NOT enough to register runners."
 }
@@ -286,8 +332,8 @@ validate_env_token() {
     info "classic token scopes: ${scopes:-none}"
     if [[ -n $TARGET_KIND ]]; then
       case $TARGET_KIND in
-        org)  [[ $scopes == *admin:org* ]] || warn "scope admin:org missing — org runner calls will fail" ;;
-        repo) [[ $scopes == *repo* ]]      || warn "scope repo missing — repo runner calls will fail" ;;
+        org) [[ $scopes == *admin:org* ]] || warn "scope admin:org missing — org runner calls will fail" ;;
+        repo) [[ $scopes == *repo* ]] || warn "scope repo missing — repo runner calls will fail" ;;
       esac
     fi
   fi
@@ -296,9 +342,14 @@ gh_login_cmd() { # $1 = login|refresh ; non-interactive device flow prints URL +
   gh auth "$1" --hostname github.com --scopes repo,admin:org "${@:2}"
 }
 do_auth() {
-  if has_env_token; then validate_env_token; ok "token accepted"; return 0; fi
+  if has_env_token; then
+    validate_env_token
+    ok "token accepted"
+    return 0
+  fi
   if gh auth status --hostname github.com >/dev/null 2>&1; then
-    ok "already logged in as $(gh api user --jq .login 2>/dev/null || echo '?')"; return 0
+    ok "already logged in as $(gh api user --jq .login 2>/dev/null || echo '?')"
+    return 0
   fi
   say ""
   say "   ${B}ACTION NEEDED (one time):${N} a link and a one-time code are printed below."
@@ -321,9 +372,15 @@ existing_indexes() {
 cfg_hash() { printf '%s' "$RUNNER_URL|$LABELS_EXTRA|$DOCKER_MODE|$MEM_LIMIT|$CPU_LIMIT|$(docker image inspect -f '{{.Id}}' "$IMAGE" 2>/dev/null)" | sha256sum | cut -c1-12; }
 container_age() { # seconds since (re)start, 0 if unknown
   local s
-  s=$(docker inspect -f '{{.State.StartedAt}}' "$1" 2>/dev/null) || { echo 0; return; }
-  s=$(date -d "$s" +%s 2>/dev/null) || { echo 0; return; }
-  echo $(( $(date +%s) - s ))
+  s=$(docker inspect -f '{{.State.StartedAt}}' "$1" 2>/dev/null) || {
+    echo 0
+    return
+  }
+  s=$(date -d "$s" +%s 2>/dev/null) || {
+    echo 0
+    return
+  }
+  echo $(($(date +%s) - s))
 }
 remove_one() { # remove_one <index> [keep-github]
   local i=$1 c="${PREFIX}-$1"
@@ -357,9 +414,13 @@ create_one() {
 retry_cmd() { # retry_cmd <cmd…> with RETRIES=n ; prints stdout of the successful attempt
   local tries=${RETRIES:-3} a=1 out
   while :; do
-    if out=$("$@" 2>/dev/null); then printf '%s' "$out"; return 0; fi
-    (( a >= tries )) && return 1
-    a=$((a + 1)); sleep $((a * 3))
+    if out=$("$@" 2>/dev/null); then
+      printf '%s' "$out"
+      return 0
+    fi
+    ((a >= tries)) && return 1
+    a=$((a + 1))
+    sleep $((a * 3))
   done
 }
 
@@ -376,22 +437,29 @@ grow_root() { # grow root partition + fs into space added to the cloud volume; n
   [[ -n $part && -e /sys/class/block/$part/partition ]] || return 0
   disk="/dev/$(lsblk -no PKNAME "/dev/$part" | head -n1)"
   pnum=$(cat "/sys/class/block/$part/partition")
-  dsz=$(blockdev --getsize64 "$disk"); psz=$(blockdev --getsize64 "/dev/$part")
-  (( dsz - psz > 1073741824 )) || return 0
+  dsz=$(blockdev --getsize64 "$disk")
+  psz=$(blockdev --getsize64 "/dev/$part")
+  ((dsz - psz > 1073741824)) || return 0
   info "disk is $((dsz >> 30)) GiB but the root partition only $((psz >> 30)) GiB → growing it"
-  if ! pkg_installed cloud-guest-utils; then RETRIES=3 run apt_get update; run apt_i cloud-guest-utils; fi
-  run_soft growpart "$disk" "$pnum" || true   # exit 1 just means NOCHANGE
+  if ! pkg_installed cloud-guest-utils; then
+    RETRIES=3 run apt_get update
+    run apt_i cloud-guest-utils
+  fi
+  run_soft growpart "$disk" "$pnum" || true # exit 1 just means NOCHANGE
   fstype=$(findmnt -no FSTYPE /)
   case $fstype in
-    ext2|ext3|ext4) run resize2fs "/dev/$part" ;;
-    xfs)            run xfs_growfs / ;;
-    *)              warn "unknown root filesystem '$fstype' — grow it manually"; return 0 ;;
+    ext2 | ext3 | ext4) run resize2fs "/dev/$part" ;;
+    xfs) run xfs_growfs / ;;
+    *)
+      warn "unknown root filesystem '$fstype' — grow it manually"
+      return 0
+      ;;
   esac
   ok "root filesystem is now $(df -h --output=size / | tail -1 | tr -d ' ')"
 }
 ensure_disk() { # ensure_disk <min_free_gb> — reclaim caches first, then fail with instructions
   local need=$1
-  if (( $(free_gb) >= need )); then return 0; fi
+  if (($(free_gb) >= need)); then return 0; fi
   warn "only $(free_gb) GB free, need ${need} GB — reclaiming caches"
   run_soft apt-get clean || true
   run_soft journalctl --vacuum-size=50M || true
@@ -399,7 +467,10 @@ ensure_disk() { # ensure_disk <min_free_gb> — reclaim caches first, then fail 
     run_soft docker builder prune -af || true
     run_soft docker image prune -f || true
   fi
-  if (( $(free_gb) >= need )); then info "reclaimed → $(free_gb) GB free"; return 0; fi
+  if (($(free_gb) >= need)); then
+    info "reclaimed → $(free_gb) GB free"
+    return 0
+  fi
   disk_help
   die "not enough disk space: $(free_gb) GB free, need ${need} GB"
 }
@@ -417,34 +488,68 @@ if [[ -f $CONF ]]; then
 fi
 while [[ $# -gt 0 ]]; do
   case $1 in
-    up|status|down|logs|heal) CMD=$1 ;;
-    [0-9]*)              LOGN=$1 ;;
-    -n|--count)          COUNT=${2:?missing value}; shift ;;
-    --org)               TARGET_KIND=org;  TARGET=${2:?missing value}; shift ;;
-    --repo)              TARGET_KIND=repo; TARGET=${2:?missing value}; shift ;;
-    --labels)            LABELS_EXTRA=${2:?missing value}; shift ;;
-    --host-docker)       DOCKER_MODE=host ;;
-    --node-major)        NODE_MAJOR=${2:?missing value}; shift ;;
-    --memory)            MEM_LIMIT=${2:?missing value}; shift ;;
-    --cpus)              CPU_LIMIT=${2:?missing value}; shift ;;
-    --upgrade)           FORCE_UPGRADE=1 ;;
-    --skip-upgrade)      SKIP_UPGRADE=1 ;;
-    --rebuild)           REBUILD=1 ;;
-    --auto-reboot)       AUTO_REBOOT=1 ;;
-    --token-file)        [[ -r ${2:-} ]] || die "--token-file: cannot read '${2:-}'"
-                         GH_TOKEN=$(tr -d '[:space:]' <"$2"); export GH_TOKEN; shift ;;
-    --keep-login)        KEEP_LOGIN=1 ;;
-    --purge)             PURGE=1 ;;
-    -h|--help)           usage; exit 0 ;;
-    *)                   usage; die "unknown argument: $1" ;;
+    up | status | down | logs | heal) CMD=$1 ;;
+    [0-9]*) LOGN=$1 ;;
+    -n | --count)
+      COUNT=${2:?missing value}
+      shift
+      ;;
+    --org)
+      TARGET_KIND=org
+      TARGET=${2:?missing value}
+      shift
+      ;;
+    --repo)
+      TARGET_KIND=repo
+      TARGET=${2:?missing value}
+      shift
+      ;;
+    --labels)
+      LABELS_EXTRA=${2:?missing value}
+      shift
+      ;;
+    --host-docker) DOCKER_MODE=host ;;
+    --node-major)
+      NODE_MAJOR=${2:?missing value}
+      shift
+      ;;
+    --memory)
+      MEM_LIMIT=${2:?missing value}
+      shift
+      ;;
+    --cpus)
+      CPU_LIMIT=${2:?missing value}
+      shift
+      ;;
+    --upgrade) FORCE_UPGRADE=1 ;;
+    --skip-upgrade) SKIP_UPGRADE=1 ;;
+    --rebuild) REBUILD=1 ;;
+    --auto-reboot) AUTO_REBOOT=1 ;;
+    --token-file)
+      [[ -r ${2:-} ]] || die "--token-file: cannot read '${2:-}'"
+      GH_TOKEN=$(tr -d '[:space:]' <"$2")
+      export GH_TOKEN
+      shift
+      ;;
+    --keep-login) KEEP_LOGIN=1 ;;
+    --purge) PURGE=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      die "unknown argument: $1"
+      ;;
   esac
   shift
 done
 
 cleanup() {
-  if (( LOGGED_IN_BY_US == 1 && KEEP_LOGIN == 0 )); then
+  if ((LOGGED_IN_BY_US == 1 && KEEP_LOGIN == 0)); then
     gh auth logout --hostname github.com </dev/null >/dev/null 2>&1 || true
-    say ""; say "   ${D}gh logged out — admin token removed from this VM (--keep-login to keep it).${N}"
+    say ""
+    say "   ${D}gh logged out — admin token removed from this VM (--keep-login to keep it).${N}"
   fi
 }
 trap cleanup EXIT
@@ -457,20 +562,28 @@ choose_target() {
     [[ -t 0 ]] || die "no target saved. Pass --org ORG or --repo OWNER/REPO (required when using GH_TOKEN non-interactively)."
     local orgs=() choice
     mapfile -t orgs < <(gh api user/orgs --paginate --jq '.[].login' 2>/dev/null || true)
-    if (( ${#orgs[@]} == 0 )); then
+    if ((${#orgs[@]} == 0)); then
       local ans
       read -rp "   Org name (or owner/repo for one repo): " ans
       if [[ $ans == */* ]]; then TARGET_KIND=repo; else TARGET_KIND=org; fi
       TARGET=$ans
     else
-    say "   Register runners for:"
-    PS3="   Pick a number: "
-    select choice in "${orgs[@]/#/org: }" "a single repo"; do
-      case $choice in
-        "org: "*)        TARGET_KIND=org;  TARGET=${choice#org: }; break ;;
-        "a single repo") TARGET_KIND=repo; read -rp "   owner/repo: " TARGET; break ;;
-      esac
-    done
+      say "   Register runners for:"
+      PS3="   Pick a number: "
+      select choice in "${orgs[@]/#/org: }" "a single repo"; do
+        case $choice in
+          "org: "*)
+            TARGET_KIND=org
+            TARGET=${choice#org: }
+            break
+            ;;
+          "a single repo")
+            TARGET_KIND=repo
+            read -rp "   owner/repo: " TARGET
+            break
+            ;;
+        esac
+      done
     fi
   fi
   if [[ $TARGET_KIND == org ]]; then
@@ -584,26 +697,32 @@ ENTRYPOINT
 # =============================== UP =========================================
 cmd_up() {
   COUNT=${COUNT:-4}
-  if ! [[ $COUNT =~ ^[0-9]+$ ]] || (( COUNT < 1 || COUNT > 50 )); then die "count must be 1-50"; fi
+  if ! [[ $COUNT =~ ^[0-9]+$ ]] || ((COUNT < 1 || COUNT > 50)); then die "count must be 1-50"; fi
   say "${B}tms-runners${N} — target: ${COUNT} runner(s), docker mode: ${DOCKER_MODE}, host: ${HOST_SHORT}"
   say "${D}log: ${LOG}${N}"
 
   # 1 ---------------------------------------------------------------- preflight
   step "Preflight checks"
   local os_id arch
-  os_id=$(. /etc/os-release; echo "${ID:-}")
+  os_id=$(
+    . /etc/os-release
+    echo "${ID:-}"
+  )
   [[ $os_id == ubuntu ]] || die "Ubuntu only (found '${os_id:-unknown}')"
   arch=$(dpkg --print-architecture)
-  case $arch in amd64|arm64) ;; *) die "unsupported CPU arch: $arch" ;; esac
-  info "Ubuntu $(. /etc/os-release; echo "$VERSION_ID") / $arch / $(mem_mb) MB RAM / $(free_gb) GB free disk"
+  case $arch in amd64 | arm64) ;; *) die "unsupported CPU arch: $arch" ;; esac
+  info "Ubuntu $(
+    . /etc/os-release
+    echo "$VERSION_ID"
+  ) / $arch / $(mem_mb) MB RAM / $(free_gb) GB free disk"
   for u in https://github.com https://api.github.com https://download.docker.com https://registry-1.docker.io/v2/ http://archive.ubuntu.com; do
     net_check "$u" || die "cannot reach $u over IPv4. Check VM outbound rules / security group / public IP."
   done
   grow_root
   ensure_disk 10
-  local rec=$(( 8 + 3 * COUNT ))
+  local rec=$((8 + 3 * COUNT))
   if [[ $DOCKER_MODE == host ]]; then rec=14; fi
-  if (( $(free_gb) < rec )); then
+  if (($(free_gb) < rec)); then
     warn "$(free_gb) GB free; ~${rec} GB recommended for ${COUNT} runner(s). Each Docker-in-Docker runner keeps its own image cache — one 'supabase start' pulls several GB into it. Fewer runners (-n) or --host-docker (shared cache) use less."
   fi
   ok "network, OS and disk look good"
@@ -623,9 +742,9 @@ cmd_up() {
   step "System update + upgrade"
   local idx=()
   mapfile -t idx < <(existing_indexes)
-  if (( SKIP_UPGRADE == 1 )); then
+  if ((SKIP_UPGRADE == 1)); then
     skip "--skip-upgrade given"
-  elif (( FORCE_UPGRADE == 1 || ${#idx[@]} == 0 )); then
+  elif ((FORCE_UPGRADE == 1 || ${#idx[@]} == 0)); then
     RETRIES=3 run apt_get update
     run apt_get -y full-upgrade
     ok "system fully upgraded"
@@ -637,7 +756,7 @@ cmd_up() {
   step "Base packages"
   local want=(ca-certificates curl gnupg git jq unzip zip tar psmisc procps util-linux) missing=() p
   for p in "${want[@]}"; do pkg_installed "$p" || missing+=("$p"); done
-  if (( ${#missing[@]} )); then
+  if ((${#missing[@]})); then
     RETRIES=3 run apt_get update
     run apt_i "${missing[@]}"
     ok "installed: ${missing[*]}"
@@ -649,33 +768,42 @@ cmd_up() {
   # 5 ------------------------------------------------------------- swap + sysctl
   step "Swap + kernel tuning"
   local mem swap changed=0
-  mem=$(mem_mb); swap=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo)
-  if (( mem < 4096 && swap < 1024 )); then
+  mem=$(mem_mb)
+  swap=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo)
+  if ((mem < 4096 && swap < 1024)); then
     if [[ ! -e /swapfile ]]; then
-      if (( $(free_gb) > 12 )); then
+      if (($(free_gb) > 12)); then
         info "RAM ${mem} MB → creating 2 GB swap"
         run bash -c 'fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048'
-        chmod 600 /swapfile; mkswap /swapfile >/dev/null; swapon /swapfile; changed=1
+        chmod 600 /swapfile
+        mkswap /swapfile >/dev/null
+        swapon /swapfile
+        changed=1
       else
         warn "low RAM and not enough disk for swap"
       fi
     elif ! swapon --show=NAME --noheadings | grep -q '^/swapfile'; then
-      swapon /swapfile || warn "could not enable existing /swapfile"; changed=1
+      swapon /swapfile || warn "could not enable existing /swapfile"
+      changed=1
     fi
   fi
   if [[ -e /swapfile ]] && ! grep -q '^/swapfile' /etc/fstab; then
-    echo '/swapfile none swap sw 0 0' >> /etc/fstab; changed=1
+    echo '/swapfile none swap sw 0 0' >>/etc/fstab
+    changed=1
   fi
   if write_file /etc/sysctl.d/99-tms-runners.conf 644 <<'EOF'
 fs.inotify.max_user_watches=524288
 fs.inotify.max_user_instances=1024
 vm.swappiness=20
 EOF
-  then sysctl -q -p /etc/sysctl.d/99-tms-runners.conf >/dev/null 2>&1 || true; changed=1; fi
-  if (( changed )); then ok "swap/sysctl configured"; else skip "swap + sysctl already set"; fi
-  local per=$(( mem / COUNT ))
-  if (( per < 1500 )); then
-    warn "${mem} MB RAM / ${COUNT} runners = ${per} MB each. Idle is fine, but parallel Playwright / 'supabase start' jobs will crawl or OOM. Sensible here: $(( mem / 1500 > 0 ? mem / 1500 : 1 )) runner(s)."
+  then
+    sysctl -q -p /etc/sysctl.d/99-tms-runners.conf >/dev/null 2>&1 || true
+    changed=1
+  fi
+  if ((changed)); then ok "swap/sysctl configured"; else skip "swap + sysctl already set"; fi
+  local per=$((mem / COUNT))
+  if ((per < 1500)); then
+    warn "${mem} MB RAM / ${COUNT} runners = ${per} MB each. Idle is fine, but parallel Playwright / 'supabase start' jobs will crawl or OOM. Sensible here: $((mem / 1500 > 0 ? mem / 1500 : 1)) runner(s)."
   fi
 
   # 6 ------------------------------------------------------------------- docker
@@ -684,13 +812,16 @@ EOF
     skip "docker $(docker version -f '{{.Server.Version}}' 2>/dev/null) running"
   else
     local codename
-    codename=$(. /etc/os-release; echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    codename=$(
+      . /etc/os-release
+      echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+    )
     if curl -fsSI -m 15 "https://download.docker.com/linux/ubuntu/dists/${codename}/Release" >/dev/null 2>&1; then
       info "using Docker's official repo (${codename})"
       RETRIES=3 run curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
       chmod a+r /etc/apt/keyrings/docker.asc
       echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${codename} stable" \
-        > /etc/apt/sources.list.d/docker.list
+        >/etc/apt/sources.list.d/docker.list
       RETRIES=3 run apt_get update
       run apt_i docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     else
@@ -711,7 +842,10 @@ EOF
   fi
   systemctl enable --now docker >/dev/null 2>&1 || true
   local a
-  for a in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
+  for a in $(seq 1 30); do
+    docker info >/dev/null 2>&1 && break
+    sleep 2
+  done
   docker info >/dev/null 2>&1 || die "docker daemon is not responding"
   ok "docker $(docker version -f '{{.Server.Version}}') ready"
 
@@ -723,7 +857,7 @@ EOF
     RETRIES=3 run curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
     chmod a+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-      > /etc/apt/sources.list.d/github-cli.list
+      >/etc/apt/sources.list.d/github-cli.list
     RETRIES=3 run apt_get update
     run apt_i gh
     ok "gh installed"
@@ -741,7 +875,7 @@ EOF
   local tr
   for tr in 1 2 3; do
     probe_access && break
-    case $PROBE_ERR in *"HTTP 401"*|*"HTTP 403"*|*"HTTP 404"*) break ;; esac
+    case $PROBE_ERR in *"HTTP 401"* | *"HTTP 403"* | *"HTTP 404"*) break ;; esac
     sleep $((tr * 3))
   done
   if [[ -n $PROBE_ERR ]] && ! has_env_token; then
@@ -761,7 +895,7 @@ EOF
   local img_hash cur_hash rv
   img_hash="$(cat "$BASE/image/Dockerfile" "$BASE/image/entrypoint.sh" | sha256sum | cut -c1-12)-n${NODE_MAJOR}"
   cur_hash=$(docker image inspect -f '{{index .Config.Labels "tms.hash"}}' "$IMAGE" 2>/dev/null || true)
-  if (( REBUILD == 0 )) && [[ $cur_hash == "$img_hash" ]]; then
+  if ((REBUILD == 0)) && [[ $cur_hash == "$img_hash" ]]; then
     skip "image $IMAGE is current ($img_hash)"
   else
     ensure_disk 8
@@ -769,8 +903,8 @@ EOF
     rv=${rv#v}
     info "building (runner v${rv}, node ${NODE_MAJOR}) — first build takes several minutes"
     local bargs=(build --pull --progress=plain -t "$IMAGE" --build-arg "RUNNER_VERSION=$rv"
-                 --build-arg "NODE_MAJOR=$NODE_MAJOR" --build-arg "IMG_HASH=$img_hash")
-    if (( REBUILD == 1 )); then bargs+=(--no-cache); fi
+      --build-arg "NODE_MAJOR=$NODE_MAJOR" --build-arg "IMG_HASH=$img_hash")
+    if ((REBUILD == 1)); then bargs+=(--no-cache); fi
     RETRIES=2 run docker "${bargs[@]}" "$BASE/image"
     ok "image built"
   fi
@@ -778,34 +912,46 @@ EOF
   # 11 ---------------------------------------------------------- runners
   step "Runners (converge to ${COUNT})"
   load_gh_runners
-  if (( GH_OK == 0 )); then warn "could not list runners on GitHub — skipping GitHub-side drift checks"; fi
+  if ((GH_OK == 0)); then warn "could not list runners on GitHub — skipping GitHub-side drift checks"; fi
   local cfg i c cur age state busy created=0 recreated=0 removed=0 kept=0
   cfg=$(cfg_hash)
   mapfile -t idx < <(existing_indexes)
   for i in $(seq 1 "$COUNT"); do
     c="${PREFIX}-$i"
     if ! docker inspect "$c" >/dev/null 2>&1; then
-      create_one "$i"; created=$((created + 1)); info "runner ${i}/${COUNT}: created"
+      create_one "$i"
+      created=$((created + 1))
+      info "runner ${i}/${COUNT}: created"
       continue
     fi
     cur=$(docker inspect -f '{{index .Config.Labels "tms.cfg"}}' "$c" 2>/dev/null || true)
     state=$(gh_field "${HOST_SHORT}-$i" 2)
     busy=$(gh_field "${HOST_SHORT}-$i" 3)
     age=$(container_age "$c")
-    if (( REBUILD == 1 )); then
-      remove_one "$i"; create_one "$i"; recreated=$((recreated + 1)); info "runner ${i}/${COUNT}: rebuilt"
+    if ((REBUILD == 1)); then
+      remove_one "$i"
+      create_one "$i"
+      recreated=$((recreated + 1))
+      info "runner ${i}/${COUNT}: rebuilt"
     elif [[ $cur != "$cfg" ]]; then
       if [[ $busy == true ]]; then
-        warn "runner ${i}: config/image changed but it is running a job — will roll on next run"; kept=$((kept + 1))
+        warn "runner ${i}: config/image changed but it is running a job — will roll on next run"
+        kept=$((kept + 1))
       else
-        remove_one "$i"; create_one "$i"; recreated=$((recreated + 1)); info "runner ${i}/${COUNT}: recreated (config or image changed)"
+        remove_one "$i"
+        create_one "$i"
+        recreated=$((recreated + 1))
+        info "runner ${i}/${COUNT}: recreated (config or image changed)"
       fi
-    elif (( GH_OK == 1 )) && [[ -z $state ]] && (( age > 240 )); then
-      remove_one "$i" keep-github; create_one "$i"; recreated=$((recreated + 1))
+    elif ((GH_OK == 1)) && [[ -z $state ]] && ((age > 240)); then
+      remove_one "$i" keep-github
+      create_one "$i"
+      recreated=$((recreated + 1))
       info "runner ${i}/${COUNT}: was missing on GitHub → re-registered"
     else
       if [[ $(docker inspect -f '{{.State.Running}}' "$c") != true ]]; then
-        docker start "$c" >/dev/null; info "runner ${i}/${COUNT}: was stopped → started"
+        docker start "$c" >/dev/null
+        info "runner ${i}/${COUNT}: was stopped → started"
       else
         info "runner ${i}/${COUNT}: ok"
       fi
@@ -813,10 +959,15 @@ EOF
     fi
   done
   for i in "${idx[@]}"; do
-    if (( i > COUNT )); then
+    if ((i > COUNT)); then
       busy=$(gh_field "${HOST_SHORT}-$i" 3)
-      if [[ $busy == true ]]; then warn "runner ${i}: extra but busy — remove on next run"
-      else remove_one "$i"; removed=$((removed + 1)); info "runner ${i}: removed (above target count)"; fi
+      if [[ $busy == true ]]; then
+        warn "runner ${i}: extra but busy — remove on next run"
+      else
+        remove_one "$i"
+        removed=$((removed + 1))
+        info "runner ${i}: removed (above target count)"
+      fi
     fi
   done
   ok "created ${created}, recreated ${recreated}, kept ${kept}, removed ${removed}"
@@ -863,9 +1014,9 @@ docker image prune -af --filter "until=168h" >/dev/null 2>&1
 docker builder prune -af --filter "until=168h" >/dev/null 2>&1
 EOF
   fi
-  if (( sd )); then systemctl daemon-reload; fi
+  if ((sd)); then systemctl daemon-reload; fi
   systemctl enable --now tms-runners-heal.timer >/dev/null 2>&1 || warn "could not enable heal timer"
-  if (( sd )); then ok "heal timer (every 5 min) + logrotate installed"; else skip "already installed"; fi
+  if ((sd)); then ok "heal timer (every 5 min) + logrotate installed"; else skip "already installed"; fi
 
   # 13 ------------------------------------------------------------- wait
   step "Waiting for runners to come online"
@@ -876,12 +1027,15 @@ EOF
       'index($1,p)==1 && $2=="online"{n=substr($1,length(p)+1); if (n ~ /^[0-9]+$/ && n+0>=1 && n+0<=c) k++} END{print k+0}' <<<"$GH_LIST")
     if [[ -t 1 ]]; then
       printf '\r\033[K   online on GitHub: %s/%s  %s(%s)%s' "$got" "$COUNT" "$D" "$(fmt_t $((SECONDS - w0)))" "$N" 2>/dev/null || true
-    elif (( got != last )); then say "   online on GitHub: ${got}/${COUNT}"; last=$got; fi
-    if (( got >= COUNT || SECONDS >= end )); then break; fi
+    elif ((got != last)); then
+      say "   online on GitHub: ${got}/${COUNT}"
+      last=$got
+    fi
+    if ((got >= COUNT || SECONDS >= end)); then break; fi
     sleep 5
   done
   if [[ -t 1 ]]; then printf '\r\033[K' 2>/dev/null || true; fi
-  if (( got >= COUNT )); then
+  if ((got >= COUNT)); then
     ok "${got}/${COUNT} runners online"
   else
     EXIT_CODE=2
@@ -912,8 +1066,10 @@ EOF
   say "   scale:     sudo ./tms-runners.sh -n 6          teardown: sudo ./tms-runners.sh down   ${D}(before deleting the VM)${N}"
   say "   ${D}Total time $(fmt_t $((SECONDS - T0))). Runners + heal timer survive reboots. Never use these on public repos.${N}"
   if [[ -f /var/run/reboot-required ]]; then
-    if (( AUTO_REBOOT == 1 )); then
-      warn "kernel/OS update needs a reboot — rebooting in 15 s (runners restart by themselves)"; sleep 15; systemctl reboot
+    if ((AUTO_REBOOT == 1)); then
+      warn "kernel/OS update needs a reboot — rebooting in 15 s (runners restart by themselves)"
+      sleep 15
+      systemctl reboot
     else
       warn "a reboot is pending (kernel/OS update). Run 'sudo reboot' when idle, or use --auto-reboot. Runners restart by themselves."
     fi
@@ -933,15 +1089,18 @@ cmd_status() {
   say "${B}Containers${N}"
   docker ps -a --filter "name=^${PREFIX}-" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
   if has_env_token || gh auth status --hostname github.com >/dev/null 2>&1; then
-    say ""; say "${B}GitHub (${TARGET_KIND} ${TARGET})${N}"
+    say ""
+    say "${B}GitHub (${TARGET_KIND} ${TARGET})${N}"
     load_gh_runners
-    if (( GH_OK == 1 )); then
+    if ((GH_OK == 1)); then
       awk -F'\t' -v p="${HOST_SHORT}-" 'index($1,p)==1{printf "  %-24s %-8s %-5s labels: %s\n",$1,$2,($3=="true"?"busy":"idle"),$4}' <<<"$GH_LIST"
     else say "  (API call failed)"; fi
   else
-    say ""; say "(gh not logged in — GitHub-side status skipped; export GH_TOKEN or run 'up --keep-login')"
+    say ""
+    say "(gh not logged in — GitHub-side status skipped; export GH_TOKEN or run 'up --keep-login')"
   fi
-  say ""; say "${B}Host${N}  $(mem_mb) MB RAM, $(free_gb) GB free disk, load: $(cut -d' ' -f1-3 /proc/loadavg)"
+  say ""
+  say "${B}Host${N}  $(mem_mb) MB RAM, $(free_gb) GB free disk, load: $(cut -d' ' -f1-3 /proc/loadavg)"
 }
 
 cmd_logs() { docker logs -f --tail 100 "${PREFIX}-${LOGN}"; }
@@ -957,21 +1116,27 @@ cmd_down() {
   do_auth
   local idx=() i
   mapfile -t idx < <(existing_indexes)
-  if (( ${#idx[@]} == 0 )); then say "   no runner containers found"; fi
+  if ((${#idx[@]} == 0)); then say "   no runner containers found"; fi
   for i in "${idx[@]}"; do
     say "   removing ${PREFIX}-$i (stop → delete container + volumes → deregister from GitHub)"
     remove_one "$i"
   done
   systemctl disable --now tms-runners-heal.timer >/dev/null 2>&1 || true
-  if (( PURGE == 1 )); then docker rmi -f "$IMAGE" >/dev/null 2>&1 || true; say "   image removed"; fi
+  if ((PURGE == 1)); then
+    docker rmi -f "$IMAGE" >/dev/null 2>&1 || true
+    say "   image removed"
+  fi
   rm -f "/etc/cron.daily/${APP}-prune" "$CONF"
   say "${G}✔ All runners deregistered and removed. Safe to terminate the VM.${N}"
 }
 
 case $CMD in
-  up)     lock_or_die; cmd_up ;;
+  up)
+    lock_or_die
+    cmd_up
+    ;;
   status) cmd_status ;;
-  logs)   cmd_logs ;;
-  heal)   cmd_heal ;;
-  down)   cmd_down ;;
+  logs) cmd_logs ;;
+  heal) cmd_heal ;;
+  down) cmd_down ;;
 esac

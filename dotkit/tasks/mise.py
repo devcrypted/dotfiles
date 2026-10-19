@@ -48,8 +48,7 @@ class Mise(Task):
 
 def _install_mise(ctx: Context) -> None:
     line = ctx.apt.source_line(REPO, "https://mise.jdx.dev/deb", "stable", "main")
-    if not ctx.apt.repo_current(REPO, line):
-        ctx.apt.add_repo(REPO, KEY_URL, line)
+    ctx.apt.ensure_repo(REPO, KEY_URL, line)
     ctx.apt.install(["mise"])
 
 

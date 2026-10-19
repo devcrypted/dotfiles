@@ -36,3 +36,14 @@ def test_hooks_task_disabled_without_git_or_by_config(make_ctx):
     assert not Hooks().enabled(ctx)  # no .git
     (ctx.repo / ".git").mkdir()
     assert not Hooks().enabled(make_ctx(Config(pre_commit=False)))
+
+
+def test_blocked_words_read_without_validating_the_rest(tmp_path):
+    from dotkit.hooks import blocked_words
+
+    base = write(tmp_path / "config.yaml", "blocked_words: [a]\nnot_a_real_key: 1\n")
+    local = write(tmp_path / "config.local.yaml", "blocked_words: [acme, '']\nprofile: {role: x}\n")
+    assert blocked_words(base, tmp_path / "missing.yaml") == ("a",)
+    assert blocked_words(base, local) == ("acme",)
+    write(local, "blocked_words: null\n")
+    assert blocked_words(base, local) == ()

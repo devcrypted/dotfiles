@@ -11,6 +11,7 @@ from .system import Facts, fetch, output, run
 
 KEYRINGS = Path("/etc/apt/keyrings")
 SOURCES = Path("/etc/apt/sources.list.d")
+SOURCES_LIST = Path("/etc/apt/sources.list")
 _NONINTERACTIVE = {"DEBIAN_FRONTEND": "noninteractive"}
 
 
@@ -47,6 +48,7 @@ class Apt:
         return "Candidate:" in policy and "Candidate: (none)" not in policy
 
     def update(self) -> None:
+        self.drop_duplicates()
         run(["apt-get", "update"], root=True)
         self._fresh = True
 
@@ -54,6 +56,8 @@ class Apt:
         if not self._fresh:
             self.update()
         run(["apt-get", "install", "-y", *packages], root=True, env=_NONINTERACTIVE)
+        # Some vendor packages (Brave, VS Code, Chrome) add their own source on install.
+        self.drop_duplicates()
 
     def upgrade(self) -> None:
         self.update()
@@ -72,8 +76,57 @@ class Apt:
         return " ".join(p for p in parts if p) + "\n"
 
     def repo_current(self, name: str, line: str) -> bool:
+        """True when our source is in place, or another one already serves the same URL."""
+        if self.other_source(name, line):
+            return True
         source = SOURCES / f"{name}.list"
         return (KEYRINGS / f"{name}.gpg").exists() and source.exists() and source.read_text() == line
+
+    def ensure_repo(self, name: str, key_url: str, line: str) -> None:
+        if not self.repo_current(name, line):
+            self.add_repo(name, key_url, line)
+
+    @staticmethod
+    def other_source(name: str, line: str) -> Path | None:
+        """A source file we didn't write that points at the same repo URL as ``line``.
+
+        apt refuses to run when two entries for one URL name different keyrings
+        ("Conflicting values set for option Signed-By"), so ours must give way.
+        """
+        url = _repo_url(line)
+        ours = SOURCES / f"{name}.list"
+        files = [SOURCES_LIST, *sorted(SOURCES.glob("*.list")), *sorted(SOURCES.glob("*.sources"))]
+        for path in files:
+            if path == ours:
+                continue
+            try:
+                text = path.read_text(errors="ignore")
+            except OSError:
+                continue
+            for entry in text.splitlines():
+                if entry.lstrip().startswith("#"):
+                    continue
+                if any(token.rstrip("/") == url for token in entry.replace("]", " ").split()):
+                    return path
+        return None
+
+    def duplicates(self) -> dict[str, Path]:
+        """Our sources that another source file now also provides: name -> that file."""
+        found = {}
+        for path in sorted(SOURCES.glob("*.list")):
+            try:
+                line = path.read_text()
+            except OSError:
+                continue
+            if f"signed-by={KEYRINGS / path.stem}.gpg" in line:  # written by add_repo
+                other = self.other_source(path.stem, line)
+                if other:
+                    found[path.stem] = other
+        return found
+
+    def drop_duplicates(self) -> None:
+        for name in self.duplicates():
+            self.remove_repo(name)
 
     def add_repo(self, name: str, key_url: str, line: str) -> None:
         key = dearmor(fetch(self.facts.template(key_url)))
@@ -84,6 +137,12 @@ class Apt:
     def remove_repo(self, name: str) -> None:
         run(["rm", "-f", str(SOURCES / f"{name}.list"), str(KEYRINGS / f"{name}.gpg")], root=True)
         self._fresh = False
+
+
+def _repo_url(line: str) -> str:
+    """The URL in a one-line ``deb [options] URL suite components`` entry."""
+    rest = line.split("]", 1)[-1].split()
+    return rest[0].rstrip("/") if rest else ""
 
 
 def dearmor(data: bytes) -> bytes:

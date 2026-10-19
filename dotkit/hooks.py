@@ -4,7 +4,10 @@ Keep the list in config.local.yaml (never committed), for names such as an
 employer or client that must not appear in this repo. Matching is whole-word and
 case-insensitive; the hook reports file and line only, never the line's content.
 
-Usage (from .pre-commit-config.yaml): python3 -m dotkit.hooks FILE...
+Usage (from .pre-commit-config.yaml): python -m dotkit.hooks FILE...
+
+Only `blocked_words` is read, so a problem elsewhere in the config never blocks a
+commit here (./install.sh reports those).
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-from .config import ConfigError, load
+import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -34,13 +37,28 @@ def find_blocked(files: list[str], words: tuple[str, ...]) -> list[str]:
     return hits
 
 
+def blocked_words(*files: Path) -> tuple[str, ...]:
+    """`blocked_words` from the last of ``files`` that sets it."""
+    words: object = []
+    for path in files:
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except FileNotFoundError:
+            continue
+        if isinstance(data, dict) and "blocked_words" in data:
+            words = data["blocked_words"] or []
+    if not isinstance(words, list):
+        raise ValueError("blocked_words must be a list of words")
+    return tuple(str(w) for w in words if str(w).strip())
+
+
 def main(argv: list[str]) -> int:
     try:
-        config = load(REPO / "config.yaml", REPO / "config.local.yaml")
-    except ConfigError as exc:
+        words = blocked_words(REPO / "config.yaml", REPO / "config.local.yaml")
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         print(f"blocked-words: {exc}", file=sys.stderr)
         return 1
-    hits = find_blocked(argv, config.blocked_words)
+    hits = find_blocked(argv, words)
     for hit in hits:
         print(hit)
     return 1 if hits else 0

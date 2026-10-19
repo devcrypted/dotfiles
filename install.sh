@@ -20,18 +20,25 @@ as_root() { if [[ $EUID -eq 0 ]]; then "$@"; else sudo "$@"; fi; }
 [[ -r /etc/debian_version ]] || die "only Debian/Ubuntu-based systems are supported"
 [[ $EUID -ne 0 || -z "${SUDO_USER:-}" ]] || die "run as your normal user, not with sudo"
 
+# The distro's Python, which is where apt installs python3-yaml. A `python3` earlier on
+# PATH (mise, pyenv, conda) usually lacks PyYAML, so only fall back to it if needed.
+PY3=/usr/bin/python3
+[[ -x "$PY3" ]] || PY3="$(command -v python3 || echo /usr/bin/python3)"
+
 missing=()
 command -v git >/dev/null || missing+=(git)
-if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+if ! "$PY3" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
   missing+=(python3)
 fi
-python3 -c 'import yaml' 2>/dev/null || missing+=(python3-yaml)
+"$PY3" -c 'import yaml' 2>/dev/null || missing+=(python3-yaml)
 if ((${#missing[@]})); then
   echo "Installing bootstrap packages: ${missing[*]}"
   as_root apt-get update -qq
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null
-  python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' ||
+  PY3=/usr/bin/python3
+  "$PY3" -c 'import sys; sys.exit(sys.version_info < (3, 11))' ||
     die "Python 3.11+ is required (Debian 12 / Ubuntu 24.04 or newer)"
+  "$PY3" -c 'import yaml' 2>/dev/null || die "python3-yaml is installed but $PY3 can't import it"
 fi
 
 # Run from the clone this script lives in; when piped from curl, clone first.
@@ -43,4 +50,4 @@ else
   repo="$CLONE_DIR"
 fi
 
-PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m dotkit "$@"
+PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}" exec "$PY3" -m dotkit "$@"

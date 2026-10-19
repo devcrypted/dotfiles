@@ -58,8 +58,7 @@ def _buildx_package(ctx: Context) -> str | None:
 def _install(ctx: Context) -> None:
     url = "https://download.docker.com/linux/{distro}"
     line = ctx.apt.source_line(REPO, url, "{codename}", "stable")
-    if not ctx.apt.repo_current(REPO, line):
-        ctx.apt.add_repo(REPO, f"{url}/gpg", line)
+    ctx.apt.ensure_repo(REPO, f"{url}/gpg", line)
     ctx.apt.install(PACKAGES)
 
 

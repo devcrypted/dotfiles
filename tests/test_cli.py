@@ -87,3 +87,20 @@ def test_every_task_is_documented_in_features():
     features = Path("FEATURES.md").read_text()
     documented = set(re.findall(r"^\| `([a-z]+)`", features, re.M))
     assert documented == {t.name for t in TASKS}
+
+
+def test_cloud_links_the_local_overlay_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "REPO", tmp_path)
+    (tmp_path / "cloud.yaml").write_text("upgrade: false")
+    config = tmp_path / "config.yaml"
+    cli._use_cloud_overlay(config)
+    cli._use_cloud_overlay(config)  # rerunning keeps the link
+    overlay = tmp_path / "config.local.yaml"
+    assert overlay.is_symlink() and overlay.read_text() == "upgrade: false"
+
+
+def test_cloud_keeps_an_existing_local_overlay(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "REPO", tmp_path)
+    (tmp_path / "config.local.yaml").write_text("upgrade: true")
+    with pytest.raises(ConfigError, match="already exists"):
+        cli._use_cloud_overlay(tmp_path / "config.yaml")

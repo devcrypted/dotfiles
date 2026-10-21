@@ -1,0 +1,32 @@
+# Overrides for Claude Code cloud environments (claude.ai/code). `./install.sh cloud`
+# links config.local.yaml here, so it's merged over config.yaml like any local overlay.
+# The VM is root on Ubuntu 24.04, setup must finish in ~5 minutes to be cached, and
+# Claude runs non-interactive bash: keep only what Claude itself uses.
+# Environment settings to pair it with: README.md#claude-code-cloud-environments
+
+profile: {role: server, gpu: false, docker: false, heavy: false}
+
+shells: {default: bash, install: [bash]} # Claude runs bash; fish/zsh add nothing
+modules: [kind, cloud] # not git: its credential helper would replace the cloud's GitHub proxy
+
+tools: # node, python, uv are preinstalled; the rest only matter in a terminal
+  node: null
+  python: null
+  uv: null
+  starship: null
+  fzf: null
+  zoxide: null
+  eza: null
+  bat: null
+  claude: null
+  opencode: null
+  "npm:cline": null
+
+apps: {timeshift: null}
+fonts: []
+upgrade: false # a full-upgrade would blow the 5-minute budget
+docker: {enabled: false} # preinstalled
+nvidia: {enabled: false}
+ssh: {generate_key: false}
+sudo_nopasswd: false
+pre_commit: false

@@ -11,6 +11,8 @@ idempotent: it plans the changes, applies only what differs, and a second run ch
   `gpu`, `docker`, `heavy`). Written on the first run by `dotkit/onboard.py`.
   `./install.sh setup` asks again.
 - `config.local.yaml` (gitignored): per-machine overrides, merged last.
+- `cloud.yaml`: overrides for Claude Code cloud VMs. `./install.sh cloud` links
+  `config.local.yaml` to it (README.md#claude-code-cloud-environments).
 - `dotkit/config.py`: typed config schema and `resolve()`, which applies the profile.
   It keeps only the `apps` whose `when` holds and folds their apt, apt_repo and mise
   parts into `packages`, `apt_repos` and `tools`.

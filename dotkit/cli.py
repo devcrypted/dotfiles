@@ -1,4 +1,4 @@
-"""Command line entry point: ``apply`` (default), ``plan``, ``status``, ``setup`` and ``adopt``."""
+"""Command line entry point: ``apply`` (default), ``plan``, ``status``, ``setup``, ``cloud`` and ``adopt``."""
 
 from __future__ import annotations
 
@@ -31,6 +31,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.paths:
         _error(f"unexpected arguments: {' '.join(map(str, args.paths))} (only `adopt` takes paths)")
         return 2
+    if args.command == "cloud":
+        try:
+            _use_cloud_overlay(_config_path(args))
+        except ConfigError as exc:
+            _error(str(exc))
+            return 2
+        args.command = "apply"
     try:
         ctx = _context(args)
         tasks = _select(args)
@@ -60,9 +67,10 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         "command",
         nargs="?",
         default="apply",
-        choices=("apply", "plan", "status", "setup", "adopt"),
+        choices=("apply", "plan", "status", "setup", "cloud", "adopt"),
         help="apply changes (default), show planned changes, summarise each task, "
-        "answer the machine profile questions again, or adopt existing config files into the repo",
+        "answer the machine profile questions again, set up a Claude Code cloud environment "
+        "(applies cloud.yaml), or adopt existing config files into the repo",
     )
     p.add_argument("paths", nargs="*", type=Path, help="adopt: files or directories under $HOME")
     p.add_argument("--module", help="adopt: module name under home/ (default: guessed from the path)")
@@ -86,7 +94,7 @@ def _adopt(args: argparse.Namespace) -> int:
     if not args.paths:
         _error("adopt needs at least one path, e.g. ./install.sh adopt ~/.config/htop")
         return 2
-    config = (args.config or REPO / "config.yaml").resolve()
+    config = _config_path(args)
     try:
         messages = adopt(args.paths, repo=REPO, home=Path.home(), config=config, module=args.module)
     except AdoptError as exc:
@@ -100,9 +108,28 @@ def _csv(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
+def _config_path(args: argparse.Namespace) -> Path:
+    return (args.config or REPO / "config.yaml").resolve()
+
+
+def _overlay_path(config_path: Path) -> Path:
+    return config_path.with_name(f"{config_path.stem}.local.yaml")
+
+
+def _use_cloud_overlay(config_path: Path) -> None:
+    """Link the local overlay to the committed cloud.yaml, so later runs keep using it."""
+    overlay = _overlay_path(config_path)
+    cloud = REPO / "cloud.yaml"
+    if overlay.is_symlink() and overlay.resolve() == cloud.resolve():
+        return
+    if overlay.exists() or overlay.is_symlink():
+        raise ConfigError(f"{overlay} already exists; move its settings into cloud.yaml or delete it")
+    overlay.symlink_to(os.path.relpath(cloud, overlay.parent))
+
+
 def _context(args: argparse.Namespace) -> Context:
-    config_path = (args.config or REPO / "config.yaml").resolve()
-    overlay = config_path.with_name(f"{config_path.stem}.local.yaml")
+    config_path = _config_path(args)
+    overlay = _overlay_path(config_path)
     profile_path = config_path.with_name("profile.yaml")
     config = load(config_path, overlay, home_dir=REPO / "home", profile=profile_path)
     facts = detect()

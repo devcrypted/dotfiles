@@ -111,6 +111,15 @@ def test_full_example_resolves_for_desktop_and_server():
     assert "kitty" not in desktop.apps
 
 
+def test_cloud_overlay_keeps_only_what_claude_uses():
+    cfg = load(Path("config.yaml"), Path("cloud.yaml"), home_dir=Path("home"))
+    assert cfg.profile == Profile(role="server", gpu=False, docker=False, heavy=False)
+    cloud = resolve(cfg, nvidia_gpu=False)
+    assert cloud.enabled_modules == ("bash", "shell", "kind", "cloud")
+    assert sorted(cloud.tools) == ["helm", "kind", "kubectl", "terraform"]
+    assert not cloud.apps and not cloud.fonts and not cloud.upgrade and not cloud.docker.enabled
+
+
 # -- onboarding -------------------------------------------------------------------------
 
 

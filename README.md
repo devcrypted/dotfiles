@@ -5,6 +5,7 @@ is safe to rerun at any time: it changes only what differs from the config.
 
 - What it manages, task by task: **[FEATURES.md](FEATURES.md)**
 - Where to make a change (new tool, new config file, new machine): **[MANAGING.md](MANAGING.md)**
+- Claude Code cloud environments: **[CLOUD.md](CLOUD.md)**
 
 ## Linux / WSL (Debian 12+, Ubuntu 24.04+, Mint, …)
 
@@ -39,6 +40,7 @@ needs root, and a run with nothing to change never asks.
 | `./install.sh --once-only` | Only the one-time tasks |
 | `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |
 | `./install.sh --only links,mise` / `--skip docker` | Pick tasks |
+| `./install.sh cloud` | Set up a Claude Code cloud VM ([CLOUD.md](CLOUD.md)) |
 | `./install.sh adopt ~/.config/<tool>` | Move a tool's config into the repo and link it back |
 | `./install.sh -v` | Print each command and its output |
 
@@ -47,6 +49,12 @@ needs root, and a run with nothing to change never asks.
 Fork, edit `config.yaml` (every key is commented) and rerun. Put per-machine
 overrides in `config.local.yaml` (gitignored). The full workflow for adding tools and
 config files is in [MANAGING.md](MANAGING.md).
+
+## Claude Code cloud environments
+
+`./install.sh cloud` sets up a Claude Code cloud VM from [`cloud.yaml`](cloud.yaml).
+**[CLOUD.md](CLOUD.md)** walks through each field of the environment dialog: network
+access, network secrets, environment variables and the two-line setup script.
 
 ## Windows
 

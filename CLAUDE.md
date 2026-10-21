@@ -11,13 +11,15 @@ idempotent: it plans the changes, applies only what differs, and a second run ch
   `gpu`, `docker`, `heavy`). Written on the first run by `dotkit/onboard.py`.
   `./install.sh setup` asks again.
 - `config.local.yaml` (gitignored): per-machine overrides, merged last.
+- `cloud.yaml`: overrides for Claude Code cloud VMs. `./install.sh cloud` links
+  `config.local.yaml` to it. `CLOUD.md` documents the environment settings.
 - `dotkit/config.py`: typed config schema and `resolve()`, which applies the profile.
   It keeps only the `apps` whose `when` holds and folds their apt, apt_repo and mise
   parts into `packages`, `apt_repos` and `tools`.
 - `dotkit/tasks/`: one file per task, registered in run order in `tasks/__init__.py`.
 - `home/<module>/`: config files symlinked into `$HOME`.
 - Docs: `README.md` (usage), `FEATURES.md` (one row per task, checked by a test),
-  `MANAGING.md` (where each kind of change goes).
+  `MANAGING.md` (where each kind of change goes), `CLOUD.md` (Claude Code cloud environments).
 
 ## Adding an application
 

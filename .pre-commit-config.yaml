@@ -84,4 +84,4 @@ repos:
         additional_dependencies: [pytest, pyyaml]
         entry: python -m pytest -q
         pass_filenames: false
-        files: ^(dotkit/|tests/|home/|config\.yaml|FEATURES\.md)
+        files: ^(dotkit/|tests/|home/|config\.yaml|cloud\.yaml|FEATURES\.md)

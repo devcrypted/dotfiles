@@ -5,6 +5,7 @@ is safe to rerun at any time: it changes only what differs from the config.
 
 - What it manages, task by task: **[FEATURES.md](FEATURES.md)**
 - Where to make a change (new tool, new config file, new machine): **[MANAGING.md](MANAGING.md)**
+- Claude Code cloud environments: **[CLOUD.md](CLOUD.md)**
 
 ## Linux / WSL (Debian 12+, Ubuntu 24.04+, Mint, …)
 
@@ -39,7 +40,7 @@ needs root, and a run with nothing to change never asks.
 | `./install.sh --once-only` | Only the one-time tasks |
 | `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |
 | `./install.sh --only links,mise` / `--skip docker` | Pick tasks |
-| `./install.sh cloud` | Set up a Claude Code cloud environment (see below) |
+| `./install.sh cloud` | Set up a Claude Code cloud VM ([CLOUD.md](CLOUD.md)) |
 | `./install.sh adopt ~/.config/<tool>` | Move a tool's config into the repo and link it back |
 | `./install.sh -v` | Print each command and its output |
 
@@ -51,40 +52,9 @@ config files is in [MANAGING.md](MANAGING.md).
 
 ## Claude Code cloud environments
 
-`./install.sh cloud` sets up a [Claude Code cloud](https://code.claude.com/docs/en/cloud-environments)
-VM. It links `config.local.yaml` to [`cloud.yaml`](cloud.yaml) and applies, so the VM gets
-bash, your git identity and aliases, and kubectl, kind, helm and terraform from mise.
-It skips what the VM already has or Claude doesn't use: Docker, node, python, the
-full upgrade, other shells, the prompt and the `git` module, whose credential helper
-would replace the cloud's GitHub proxy. It takes about a minute.
-
-In claude.ai/code, open the environment selector, choose **New environment**, and set:
-
-- **Network access**: **Custom**, with **Also include default list of common package
-  managers** ticked, plus `mise.jdx.dev`, `mise-versions.jdx.dev` and `get.helm.sh`.
-- **Environment variables**: `CLAUDE_ENV_FILE` puts the mise tools on PATH for every
-  command. Claude's Bash tool doesn't keep PATH changes from `~/.bashrc`.
-
-  ```text
-  CLAUDE_ENV_FILE=/root/.config/shell/claude-env.sh
-  BASH_DEFAULT_TIMEOUT_MS=600000
-  BASH_MAX_TIMEOUT_MS=600000
-  ```
-
-- **Setup script**:
-
-  ```bash
-  #!/bin/bash
-  exec > >(tee -a ~/dotfiles-setup.log) 2>&1
-  git clone --depth 1 https://github.com/devcrypted/dotfiles.git ~/dotfiles
-  timeout 270 ~/dotfiles/install.sh cloud || echo "dotfiles: setup failed (log above)"
-  exit 0
-  ```
-
-The script must exit 0, and it has to finish in about five minutes or the VM isn't cached.
-It runs again only when you edit the script or the network settings, or after about
-seven days. Pushing to this repo doesn't trigger a rerun, so to pick up changes, edit a
-line of the script. Edit `cloud.yaml` to change what the VM gets.
+`./install.sh cloud` sets up a Claude Code cloud VM from [`cloud.yaml`](cloud.yaml).
+**[CLOUD.md](CLOUD.md)** walks through each field of the environment dialog: network
+access, network secrets, environment variables and the two-line setup script.
 
 ## Windows
 

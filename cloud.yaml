@@ -2,7 +2,7 @@
 # links config.local.yaml here, so it's merged over config.yaml like any local overlay.
 # The VM is root on Ubuntu 24.04, setup must finish in ~5 minutes to be cached, and
 # Claude runs non-interactive bash: keep only what Claude itself uses.
-# Environment settings to pair it with: README.md#claude-code-cloud-environments
+# Environment settings to pair it with: CLOUD.md
 
 profile: {role: server, gpu: false, docker: false, heavy: false}
 

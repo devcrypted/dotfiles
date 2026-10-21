@@ -8,9 +8,11 @@ field of the environment dialog so every session starts with these dotfiles.
 
 `./install.sh cloud` does the machine side. It links `config.local.yaml` to
 [`cloud.yaml`](cloud.yaml) and applies, so the VM gets bash, your git identity and
-aliases, and kubectl, kind, helm and terraform from mise. It skips:
+aliases, and these from mise: node (LTS), pnpm, the Supabase CLI, wrangler, kubectl,
+kind, helm, terraform and [rtk](#token-savings). It skips:
 
-- What the VM already has: Docker, node, python and uv.
+- What the VM already has: Docker with Compose, python and uv. The VM has node too,
+  but an older one than the LTS.
 - What Claude doesn't use: other shells, the prompt, fonts and the full upgrade.
 - The `git` module, whose credential helper would replace the cloud's GitHub proxy.
 
@@ -69,8 +71,22 @@ right home for any token. An environment variable is readable by everyone who us
 environment.
 
 **You don't need any to start.** GitHub is already authenticated through the GitHub
-proxy, which also never gets secrets. Add one when Claude should call an API that
-needs a key:
+proxy, which also never gets secrets. Local Supabase in Docker uses its own local keys.
+Add a secret when Claude should call a hosted API:
+
+| Service | Allowed websites | Key | Variable its CLI or SDK reads |
+| --- | --- | --- | --- |
+| Supabase (CLI, Management API) | `api.supabase.com` | A personal access token (`sbp_…`) | `SUPABASE_ACCESS_TOKEN` |
+| Cloudflare (wrangler) | `api.cloudflare.com` | An API token scoped to Workers/Pages | `CLOUDFLARE_API_TOKEN` |
+| Resend | `api.resend.com` | An API key (`re_…`), ideally sending-only | `RESEND_API_KEY` |
+
+All three are **Bearer**. A CLI or SDK may refuse to run while its variable is unset,
+even though the proxy adds the real key. Whether a placeholder value in that variable
+works with the proxy is untested. If it doesn't, put the real key in an environment
+variable instead, on a personal environment only, and add the host to the network
+allowlist. Give cloud sessions keys for a staging project, not production.
+
+The fields of the **Add secret** form:
 
 | Field | What to enter |
 | --- | --- |
@@ -109,10 +125,23 @@ BASH_MAX_TIMEOUT_MS=600000
 | `BASH_DEFAULT_TIMEOUT_MS` | Lets commands run for 10 minutes by default instead of 2 (terraform, kind, builds) |
 | `BASH_MAX_TIMEOUT_MS` | The longest timeout Claude may ask for |
 
+For this stack:
+
+```text
+ASTRO_TELEMETRY_DISABLED=1
+WRANGLER_SEND_METRICS=false
+CLOUDFLARE_ACCOUNT_ID=<your account id>
+```
+
+The two telemetry hosts aren't on the allowlist, so turning telemetry off avoids blocked
+requests. The account ID isn't a secret, and it saves wrangler from asking which
+account to use.
+
 Optional:
 
 | Variable | Effect |
 | --- | --- |
+| `BASH_MAX_OUTPUT_LENGTH=15000` | Halves how much command output reaches Claude (default 30000 characters) |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | Turns on agent teams |
 | `CLAUDE_CODE_SUBAGENT_MODEL` | Default model for subagents |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Token count at which the conversation is summarised |
@@ -157,12 +186,79 @@ pick up changes right away, edit a line of the script, for example a comment.
 To add a package for every session, put it in `cloud.yaml` (`packages:` or `tools:`),
 not in the script. That keeps the script at two commands.
 
+## In your project repo
+
+Hooks in a cloud session run only from the session's repository (and your
+organization's managed settings), never from `~/.claude/settings.json`. Per-project
+setup therefore goes in the project's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"$CLAUDE_CODE_REMOTE\" = true ] || exit 0; export PATH=\"$HOME/.local/share/mise/shims:$PATH\"; cd \"$CLAUDE_PROJECT_DIR\" && pnpm install --frozen-lockfile --silent"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "export PATH=\"$HOME/.local/share/mise/shims:$PATH\"; command -v rtk >/dev/null || exit 0; rtk hook claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- **SessionStart** runs `pnpm install` when a cloud session starts. It's skipped on your
+  own machine, where `CLAUDE_CODE_REMOTE` isn't `true`.
+- **PreToolUse** is the [rtk](#token-savings) hook. It runs locally too, and does nothing
+  where rtk isn't installed.
+
+To start sessions with the project's Docker images already pulled, add this to the
+end of the setup script. It's untested: the project's path in the VM, and whether the
+repo is already cloned when the script runs, still need checking.
+
+```bash
+(dockerd >/var/log/dockerd.log 2>&1 &) && sleep 5
+docker compose -f /path/to/project/docker-compose.yml pull || true
+```
+
+Keep the 5-minute budget in mind: the full Supabase stack is several gigabytes.
+
+## Token savings
+
+Three things keep sessions cheap:
+
+- **`~/.claude/CLAUDE.md`** on the VM ([source](home/cloud/.claude/CLAUDE.md)) asks
+  Claude to search before reading, cap noisy output and keep replies short. It's loaded
+  into every session, so it stays a few lines long.
+- **[rtk](https://github.com/rtk-ai/rtk)** shortens the output of common commands
+  (git, test runners, package managers, docker) before Claude sees it. mise installs
+  it on every machine, and the PreToolUse hook above turns it on. It only affects the
+  Bash tool, not Claude's own Read and Grep. When condensed output isn't enough,
+  `rtk bypass <command>` shows the full output. Telemetry is off unless you run
+  `rtk telemetry enable`.
+- **`BASH_MAX_OUTPUT_LENGTH`**, under [Environment variables](#environment-variables),
+  is a hard cap on everything else.
+
 ## Checking a new environment
 
 Start a session in the environment and ask Claude to run:
 
 ```bash
-tail -40 ~/dotfiles-setup.log; kubectl version --client; git config --global user.email
+tail -40 ~/dotfiles-setup.log; node -v; pnpm -v; supabase -v; wrangler -v; docker compose version
 ```
 
 Then run `/context` and check that `/root/.claude/CLAUDE.md` is listed under memory

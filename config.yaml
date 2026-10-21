@@ -49,6 +49,7 @@ apt_repos: {}
 # Removing an entry uninstalls it.
 tools:
   node: lts
+  pnpm: latest
   python: latest
   uv: latest
   kubectl: latest
@@ -60,6 +61,9 @@ tools:
   eza: latest # modern ls (ll, la, lt)
   bat: latest # cat with syntax highlighting
   starship: latest
+  supabase: latest # Supabase CLI (local stack runs in Docker)
+  wrangler: latest # Cloudflare Workers/Pages CLI
+  rtk: latest # compresses command output for AI agents (hook: CLOUD.md#token-savings)
   # AI coding assistants. Not self-updating: `mise upgrade` refreshes them.
   claude: latest # Claude Code
   opencode: latest

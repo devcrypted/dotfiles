@@ -9,8 +9,7 @@ profile: {role: server, gpu: false, docker: false, heavy: false}
 shells: {default: bash, install: [bash]} # Claude runs bash; fish/zsh add nothing
 modules: [kind, cloud] # not git: its credential helper would replace the cloud's GitHub proxy
 
-tools: # node, python, uv are preinstalled; the rest only matter in a terminal
-  node: null
+tools: # python, uv are preinstalled (node is too, but older than LTS); the rest are terminal-only
   python: null
   uv: null
   starship: null

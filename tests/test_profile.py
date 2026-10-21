@@ -116,7 +116,17 @@ def test_cloud_overlay_keeps_only_what_claude_uses():
     assert cfg.profile == Profile(role="server", gpu=False, docker=False, heavy=False)
     cloud = resolve(cfg, nvidia_gpu=False)
     assert cloud.enabled_modules == ("bash", "shell", "kind", "cloud")
-    assert sorted(cloud.tools) == ["helm", "kind", "kubectl", "terraform"]
+    assert cloud.tools.keys() == {
+        "node",
+        "pnpm",
+        "kubectl",
+        "kind",
+        "helm",
+        "terraform",
+        "supabase",
+        "wrangler",
+        "rtk",
+    }
     assert not cloud.apps and not cloud.fonts and not cloud.upgrade and not cloud.docker.enabled
 
 

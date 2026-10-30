@@ -224,3 +224,17 @@ def test_unanswered_lists_keys_an_old_profile_lacks(tmp_path):
 def load_profile(path):
     (path.parent / "config.yaml").write_text("")
     return load(path.parent / "config.yaml", profile=path).profile
+
+
+MINT_CINNAMON = Hardware(ram_gb=32, cpus=8, desktop=True, gpu="", cinnamon=True)
+
+
+def test_cinnamon_look_is_asked_only_on_a_mint_cinnamon_desktop(capsys):
+    assert onboard.onboard(BASE, MINT, given={}, tty=None, hw=MINT_CINNAMON).cinnamon
+    assert not onboard.onboard(BASE, MINT, given={}, tty=None, hw=DESKTOP).cinnamon  # Mint, other desktop
+    assert not onboard.onboard(BASE, FACTS, given={}, tty=None, hw=MINT_CINNAMON).cinnamon  # Ubuntu
+    assert not onboard.onboard(BASE, MINT, given={"role": "server"}, tty=None, hw=MINT_CINNAMON).cinnamon
+    # role, docker, heavy, harden, then the desktop look: decline it.
+    profile = onboard.onboard(BASE, MINT, given={}, tty=io.StringIO("d\ny\ny\ns\nn\n"), hw=MINT_CINNAMON)
+    assert not profile.cinnamon
+    assert "Apply the saved Cinnamon desktop" in capsys.readouterr().out

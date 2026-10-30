@@ -8,6 +8,11 @@
     keep Xbox? taskbar on the left?) and saves the answers to
     %ProgramData%\dotfiles\profile.json, so later runs don't ask. -Setup asks again.
 
+    Per-machine overrides (optional) go in %ProgramData%\dotfiles\config.json:
+      { "skipApps":   ["Docker.DockerDesktop"],      winget IDs from packages.json to leave out
+        "extraApps":  ["Spotify.Spotify"],           more winget IDs for this machine
+        "hardenSkip": ["security", "edge"] }         harden.ps1 sections to leave alone
+
     Safe to rerun: installed packages are skipped (never upgraded), enabled features
     and existing distros are left alone, and hardening runs again only when
     harden.ps1 or the answers change (or with -RerunHarden).
@@ -38,6 +43,7 @@ $ErrorActionPreference = 'Stop'
 $RawBase = 'https://raw.githubusercontent.com/devcrypted/dotfiles/main/windows'
 $StateDir = Join-Path $env:ProgramData 'dotfiles'
 $ProfileFile = Join-Path $StateDir 'profile.json'
+$ConfigFile = Join-Path $StateDir 'config.json'
 $StateFile = Join-Path $StateDir 'state.json'
 
 $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -57,6 +63,13 @@ function Read-Json([string]$Path) {
     if (Test-Path $Path) { return Get-Content -Raw $Path | ConvertFrom-Json }
     return $null
 }
+
+# --- Per-machine overrides (config.json, optional) ---------------------------------
+$local = Read-Json $ConfigFile
+$skipApps = @($local.skipApps | Where-Object { $_ })
+$extraApps = @($local.extraApps | Where-Object { $_ })
+$hardenSkip = @($local.hardenSkip | Where-Object { $_ })
+if ($local) { Write-Host "Using overrides from $ConfigFile" -ForegroundColor DarkCyan }
 
 # --- Machine profile: asked once, saved -------------------------------------------
 $defaults = [ordered]@{ harden = $true; keepOneDrive = $false; keepXbox = $false; taskbarLeft = $false }
@@ -98,6 +111,22 @@ if ($Setup -or $missing) {
 # --- Apps --------------------------------------------------------------------------
 if (-not $SkipApps) {
     if (-not $PackagesFile) { $PackagesFile = Get-RepoFile 'packages.json' }
+    if ($skipApps -or $extraApps) {
+        # Apply config.json to a copy of the list: drop skipped IDs, add extra ones.
+        $list = Get-Content -Raw $PackagesFile | ConvertFrom-Json
+        foreach ($source in $list.Sources) {
+            $source.Packages = @($source.Packages | Where-Object { $skipApps -notcontains $_.PackageIdentifier })
+        }
+        $winget = $list.Sources | Where-Object { $_.SourceDetails.Name -eq 'winget' } | Select-Object -First 1
+        foreach ($id in $extraApps) {
+            if (@($winget.Packages.PackageIdentifier) -notcontains $id) {
+                $winget.Packages += [pscustomobject]@{ PackageIdentifier = $id }
+            }
+        }
+        $list.Sources = @($list.Sources | Where-Object { @($_.Packages).Count })
+        $PackagesFile = Join-Path $env:TEMP 'dotfiles-packages.local.json'
+        [IO.File]::WriteAllText($PackagesFile, ($list | ConvertTo-Json -Depth 6))  # UTF-8, no BOM
+    }
     Write-Host 'Installing winget packages (installed ones are skipped)...' -ForegroundColor Cyan
     winget import --import-file $PackagesFile --no-upgrade --ignore-unavailable `
         --accept-package-agreements --accept-source-agreements
@@ -128,7 +157,8 @@ if (-not $SkipWsl) {
 if (-not $SkipHarden -and $answers.harden) {
     $script = Get-RepoFile 'harden.ps1'
     $sha = [Security.Cryptography.SHA256]::Create()
-    $bytes = [IO.File]::ReadAllBytes($script) + [Text.Encoding]::UTF8.GetBytes(($answers | ConvertTo-Json -Compress))
+    $settings = @{ answers = $answers; skip = $hardenSkip } | ConvertTo-Json -Compress -Depth 4
+    $bytes = [IO.File]::ReadAllBytes($script) + [Text.Encoding]::UTF8.GetBytes($settings)
     $fingerprint = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').Substring(0, 16)
     $state = Read-Json $StateFile
     if ($state -and $state.harden -eq $fingerprint -and -not $RerunHarden) {
@@ -136,6 +166,7 @@ if (-not $SkipHarden -and $answers.harden) {
     } else {
         Write-Host 'Debloating and hardening Windows...' -ForegroundColor Cyan
         $hardenArgs = @{ KeepOneDrive = $answers.keepOneDrive; KeepXbox = $answers.keepXbox; TaskbarLeft = $answers.taskbarLeft }
+        if ($hardenSkip) { $hardenArgs.Skip = [string[]]$hardenSkip }
         & $script @hardenArgs
         New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
         @{ harden = $fingerprint; at = (Get-Date).ToString('s') } | ConvertTo-Json | Set-Content -Encoding UTF8 $StateFile

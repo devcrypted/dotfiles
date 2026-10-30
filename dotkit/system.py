@@ -8,10 +8,18 @@ import pwd
 import shlex
 import subprocess
 import threading
+import urllib.parse
 import urllib.request
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from .progress import Progress, size
+
+# Turns one line of a command's output into (fraction done or None, text to show), or
+# None to drop it. Lines with a fraction are progress reports (e.g. apt's status lines):
+# they update the bar but are left out of the output kept for error messages.
+Parser = Callable[[str], "tuple[float | None, str] | None"]
 
 _DEBIAN_VERSIONS = {"bullseye": "11", "bookworm": "12", "trixie": "13"}
 _ARCHES = {"x86_64": "amd64", "aarch64": "arm64"}
@@ -41,12 +49,14 @@ def run(
     env: Mapping[str, str] | None = None,
     input: str | None = None,
     cwd: Path | None = None,
+    progress: Parser | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``argv`` and return the result with stdout/stderr captured as text.
 
     ``root`` runs it through sudo (unless we already are root); ``env`` adds
     variables in a way that survives sudo's environment reset. Output is streamed
-    instead of captured when ``verbose`` is set.
+    instead of captured when ``verbose`` is set; otherwise a live status line shows
+    the latest output, with a bar when ``progress`` can tell how far along it is.
     """
     cmd = list(argv)
     if env:
@@ -56,18 +66,59 @@ def run(
         cmd = ["sudo", *cmd]
     if verbose:
         print(f"      $ {shlex.join(cmd)}", flush=True)
-    result = subprocess.run(
-        cmd,
-        input=input,
-        cwd=cwd,
-        text=True,
-        stdout=None if verbose else subprocess.PIPE,
-        stderr=None if verbose else subprocess.STDOUT,
-        check=False,
-    )
+        result = subprocess.run(cmd, input=input, cwd=cwd, text=True, check=False)
+    else:
+        result = _run_with_progress(cmd, input, cwd, progress)
     if check and result.returncode != 0:
         raise CommandError(cmd, result.returncode, result.stdout or "")
     return result
+
+
+def _run_with_progress(
+    cmd: list[str], input: str | None, cwd: Path | None, parse: Parser | None
+) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if input is not None:
+        assert proc.stdin is not None
+
+        # Write from a thread so a chatty command can't fill its output pipe first.
+        def feed() -> None:
+            assert proc.stdin is not None
+            try:
+                proc.stdin.write(input.encode())
+            finally:
+                proc.stdin.close()
+
+        threading.Thread(target=feed, daemon=True).start()
+    kept: list[str] = []
+    assert proc.stdout is not None
+    with Progress() as bar:
+        pending = b""
+        while chunk := proc.stdout.read1(65536):
+            pending += chunk
+            # Progress meters redraw with \r; treat it as a line end too.
+            *lines, pending = pending.replace(b"\r", b"\n").split(b"\n")
+            for raw in lines:
+                line = raw.decode(errors="replace").rstrip()
+                if not line:
+                    continue
+                shown = parse(line) if parse else (None, line)
+                if shown is None:
+                    continue
+                fraction, text = shown
+                if fraction is None:  # lines with a percentage only drive the bar
+                    kept.append(line)
+                bar.update(fraction, text)
+        if pending.strip():
+            kept.append(pending.decode(errors="replace").rstrip())
+        returncode = proc.wait()
+    return subprocess.CompletedProcess(cmd, returncode, "\n".join(kept) + "\n" if kept else "")
 
 
 def output(argv: Sequence[str], *, any_exit: bool = False) -> str:
@@ -84,12 +135,21 @@ def output(argv: Sequence[str], *, any_exit: bool = False) -> str:
 
 
 def fetch(url: str, timeout: int = 60) -> bytes:
-    """Download ``url``. Some CDNs reject urllib's default User-Agent, so send our own."""
+    """Download ``url`` with a progress bar for big files. Some CDNs reject urllib's
+    default User-Agent, so send our own."""
     request = urllib.request.Request(
         url, headers={"User-Agent": "dotkit (+https://github.com/devcrypted/dotfiles)"}
     )
-    with urllib.request.urlopen(request, timeout=timeout) as resp:
-        return resp.read()
+    name = urllib.parse.unquote(url.rstrip("/").rsplit("/", 1)[-1]) or url
+    with urllib.request.urlopen(request, timeout=timeout) as resp, Progress() as bar:
+        total = int(resp.headers.get("Content-Length") or 0)
+        chunks, done = [], 0
+        while chunk := resp.read(256 * 1024):
+            chunks.append(chunk)
+            done += len(chunk)
+            amount = f"{size(done)} of {size(total)}" if total else size(done)
+            bar.update(done / total if total else None, f"{name}  {amount}")
+        return b"".join(chunks)
 
 
 class _Sudo:

@@ -13,6 +13,22 @@ KEYRINGS = Path("/etc/apt/keyrings")
 SOURCES = Path("/etc/apt/sources.list.d")
 SOURCES_LIST = Path("/etc/apt/sources.list")
 _NONINTERACTIVE = {"DEBIAN_FRONTEND": "noninteractive"}
+# apt writes machine-readable progress ("dlstatus:…", "pmstatus:…") to this descriptor.
+STATUS_FD = ["-o", "APT::Status-Fd=1"]
+
+
+def apt_status(line: str) -> tuple[float | None, str] | None:
+    """Progress parser for apt-get: real percentages for downloading and installing."""
+    kind, _, rest = line.partition(":")
+    if kind in ("dlstatus", "pmstatus"):
+        _, _, rest = rest.partition(":")  # item number / package name
+        percent, _, text = rest.partition(":")
+        try:
+            fraction = float(percent) / 100
+        except ValueError:
+            return None
+        return fraction, ("Downloading: " if kind == "dlstatus" else "") + text
+    return None, line
 
 
 class Apt:
@@ -55,13 +71,20 @@ class Apt:
     def install(self, packages: Iterable[str]) -> None:
         if not self._fresh:
             self.update()
-        run(["apt-get", "install", "-y", *packages], root=True, env=_NONINTERACTIVE)
+        run(
+            ["apt-get", *STATUS_FD, "install", "-y", *packages],
+            root=True,
+            env=_NONINTERACTIVE,
+            progress=apt_status,
+        )
         # Some vendor packages (Brave, VS Code, Chrome) add their own source on install.
         self.drop_duplicates()
 
     def upgrade(self) -> None:
         self.update()
-        run(["apt-get", "full-upgrade", "-y"], root=True, env=_NONINTERACTIVE)
+        run(
+            ["apt-get", *STATUS_FD, "full-upgrade", "-y"], root=True, env=_NONINTERACTIVE, progress=apt_status
+        )
 
     # -- third-party repositories -----------------------------------------------------
 

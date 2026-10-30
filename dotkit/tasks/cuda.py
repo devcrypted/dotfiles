@@ -9,6 +9,7 @@ import tempfile
 from functools import partial
 from pathlib import Path
 
+from ..apt import STATUS_FD, apt_status
 from ..system import CommandError, fetch, output, run
 from .base import Change, Context, Task
 
@@ -106,7 +107,12 @@ def _repair(ctx: Context) -> None:
     run(["dpkg", "--configure", "-a"], root=True, env={"DEBIAN_FRONTEND": "noninteractive"})
     # apt reuses the .debs already in /var/cache/apt/archives, so this only downloads
     # what an interrupted download never finished.
-    run(["apt-get", "install", "-f", "-y"], root=True, env={"DEBIAN_FRONTEND": "noninteractive"})
+    run(
+        ["apt-get", *STATUS_FD, "install", "-f", "-y"],
+        root=True,
+        env={"DEBIAN_FRONTEND": "noninteractive"},
+        progress=apt_status,
+    )
     if not nvcc_version():
         _install(ctx)
         return

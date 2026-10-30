@@ -43,14 +43,26 @@ needs root, and a run with nothing to change never asks.
 
 ## Making it yours
 
-Fork, edit `config.yaml` (every key is commented) and rerun. Put per-machine
-overrides in `config.local.yaml` (gitignored). The full workflow for adding tools and
-config files is in [MANAGING.md](MANAGING.md).
+Fork, edit `config.yaml` (every key is commented) and rerun. The full workflow for
+adding tools and config files is in [MANAGING.md](MANAGING.md).
+
+`profile.yaml` holds this machine's answers to the setup questions. Everything else in
+`config.yaml` applies to every machine, but nothing is forced: any key can be changed
+for one machine in `config.local.yaml` (gitignored, merged last; `null` removes a key):
+
+```yaml
+# config.local.yaml
+shells: {default: bash}          # keep bash as the login shell
+tools: {terraform: null}         # don't install terraform here
+upgrade: false                   # no apt full-upgrade on the first run
+ssh: {generate_key: false}
+harden: {skip: [firewall]}       # Mint: leave ufw alone
+```
 
 ## Linux Mint (Cinnamon)
 
-On a desktop running Linux Mint with Cinnamon, the `cinnamon` task also brings over
-the desktop itself: panel layout and applets, themes, icons, cursor, shortcuts,
+On a desktop running Linux Mint with Cinnamon, the setup asks whether to apply the
+saved desktop look. If yes, the `cinnamon` task brings over the desktop itself: panel layout and applets, themes, icons, cursor, shortcuts,
 gestures and Nemo settings (see `cinnamon:` in `config.yaml`). Other distros and
 desktops, and servers, skip it. After changing the desktop through System Settings:
 
@@ -88,6 +100,22 @@ once, then again only when `harden.ps1` or your answers change (`-RerunHarden` f
 Run it as the user whose desktop you want changed: per-user settings go to the account
 that runs it. `-SkipApps`, `-SkipWsl` and `-SkipHarden` leave a part out. Then open
 Ubuntu and follow the Linux steps above.
+
+Per-machine overrides go in `%ProgramData%\dotfiles\config.json` (optional, never
+committed), the Windows counterpart of `config.local.yaml`:
+
+```json
+{
+  "skipApps": ["Docker.DockerDesktop", "9NKSQGP7F2NH"],
+  "extraApps": ["Spotify.Spotify"],
+  "hardenSkip": ["security", "edge"]
+}
+```
+
+`skipApps` leaves out IDs from `packages.json` (`9NKSQGP7F2NH` is WhatsApp from the
+Store), `extraApps` adds winget IDs for this machine only, and `hardenSkip` leaves
+`harden.ps1` sections alone (see `Get-Help .\windows\harden.ps1` for the names).
+Changing `hardenSkip` makes the next run apply hardening again.
 
 `harden.ps1` also works on its own from a clone:
 

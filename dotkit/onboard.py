@@ -8,6 +8,7 @@ can't apply (CUDA without an NVIDIA GPU) is not asked at all.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -27,6 +28,7 @@ COMMENTS = {
     "docker": "Docker Engine",
     "heavy": "apps marked `when: [heavy]` in config.yaml",
     "harden": "none | standard | aggressive: scripts/mint/harden.sh (Linux Mint only)",
+    "cinnamon": "apply the saved Cinnamon desktop look in desktop/cinnamon/",
 }
 MINT = "linuxmint"
 
@@ -37,6 +39,7 @@ class Hardware:
     cpus: int
     desktop: bool  # a graphical session or display manager exists
     gpu: str  # NVIDIA GPU name, "" when there is none
+    cinnamon: bool = False  # the Cinnamon desktop is installed
 
     @classmethod
     def probe(cls, facts: Facts) -> Hardware:
@@ -45,6 +48,7 @@ class Hardware:
             cpus=os.cpu_count() or 0,
             desktop=system.has_desktop(),
             gpu=system.gpu_name() if facts.nvidia_gpu else "",
+            cinnamon=shutil.which("cinnamon") is not None,
         )
 
     def describe(self, facts: Facts) -> str:
@@ -69,7 +73,12 @@ def defaults(facts: Facts, hw: Hardware, role: str | None = None) -> Profile:
         docker=desktop and hw.ram_gb >= 4,
         heavy=desktop and hw.ram_gb >= 8,
         harden="standard" if facts.distro_id == MINT and not facts.wsl else "none",
+        cinnamon=desktop and _mint_cinnamon(facts, hw),
     )
+
+
+def _mint_cinnamon(facts: Facts, hw: Hardware) -> bool:
+    return facts.distro_id == MINT and not facts.wsl and hw.cinnamon
 
 
 def onboard(
@@ -164,10 +173,30 @@ def onboard(
                 {"s": "standard", "a": "aggressive", "n": "none"},
                 harden,
             )
+
+    if role != "desktop" or not _mint_cinnamon(facts, hw):
+        cinnamon = False  # the saved look only fits a Linux Mint Cinnamon desktop
+    elif "cinnamon" in given:
+        cinnamon = given["cinnamon"]
+    else:
+        cinnamon = default("cinnamon", base.cinnamon)
+        if ask := asking("cinnamon"):
+            cinnamon = ask.yes(
+                "Apply the saved Cinnamon desktop (panel and applets, themes, icons, shortcuts, "
+                "gestures from desktop/cinnamon/)? It replaces this desktop's current look.",
+                cinnamon,
+            )
     if asker:
         print()
 
-    return Profile(role=role, gpu=bool(gpu), docker=bool(docker), heavy=bool(heavy), harden=harden)  # type: ignore[arg-type]
+    return Profile(
+        role=role,  # type: ignore[arg-type]
+        gpu=bool(gpu),
+        docker=bool(docker),
+        heavy=bool(heavy),
+        harden=harden,  # type: ignore[arg-type]
+        cinnamon=bool(cinnamon),
+    )
 
 
 def save(path: Path, profile: Profile) -> None:

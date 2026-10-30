@@ -93,6 +93,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         choices=("none", "standard", "aggressive"),
         help="Linux Mint: debloat and harden with scripts/mint/harden.sh",
     )
+    prof.add_argument(
+        "--cinnamon",
+        action=argparse.BooleanOptionalAction,
+        help="Linux Mint Cinnamon: apply the saved desktop look (desktop/cinnamon/)",
+    )
     prof.add_argument("-y", "--yes", action="store_true", help="don't ask: use detected defaults")
     return p.parse_args(argv)
 
@@ -225,6 +230,8 @@ class Runner:
             extras = [name for name in ("gpu", "docker", "heavy") if getattr(p, name)]
             if p.harden != "none":
                 extras.append("harden" if p.harden == "standard" else "harden:aggressive")
+            if p.cinnamon and ctx.facts.distro_id == "linuxmint":
+                extras.append("cinnamon")
             print(self._paint("2", f"  profile: {p.role}{''.join(f' +{e}' for e in extras)} (profile.yaml)"))
 
         changed = unchanged = 0

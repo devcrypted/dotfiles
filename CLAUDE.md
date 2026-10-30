@@ -8,8 +8,10 @@ idempotent: it plans the changes, applies only what differs, and a second run ch
 
 - `config.yaml`: what to install and configure (every key is commented there).
 - `profile.yaml` (gitignored, one per machine): onboarding answers (`role: desktop|server`,
-  `gpu`, `docker`, `heavy`). Written on the first run by `dotkit/onboard.py`.
-  `./install.sh setup` asks again.
+  `gpu`, `docker`, `heavy`, `harden`, `cinnamon`). Written on the first run by
+  `dotkit/onboard.py`; a run after a new question is added asks only that one.
+  `./install.sh setup` asks again. Nothing may be forced on a machine: what the profile
+  doesn't cover must be overridable in `config.local.yaml` (Windows: `config.json`).
 - `config.local.yaml` (gitignored): per-machine overrides, merged last.
 - `cloud.yaml`: overrides for Claude Code cloud VMs. `./install.sh cloud` links
   `config.local.yaml` to it. `CLOUD.md` documents the environment settings.
@@ -25,7 +27,8 @@ idempotent: it plans the changes, applies only what differs, and a second run ch
   profile's `harden` answer picks (`none | standard | aggressive`). Its preview output
   (lines starting `~`) is the task's plan, so keep that format.
 - `windows/install.ps1`: the whole Windows setup: winget apps from `windows/packages.json`,
-  WSL, then `windows/harden.ps1`. Its answers live in `%ProgramData%\dotfiles\profile.json`.
+  WSL, then `windows/harden.ps1`. Its answers live in `%ProgramData%\dotfiles\profile.json`,
+  per-machine overrides (`skipApps`, `extraApps`, `hardenSkip`) in `config.json` beside it.
 - `web/`: Cloudflare Worker for `https://dot.kamal.sh`, the short URL for both installers
   (`install.sh` for curl, `windows/install.ps1` for PowerShell). `install.sh` must keep
   working when piped (`curl | bash`): everything stays inside `main()`.

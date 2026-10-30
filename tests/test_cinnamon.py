@@ -42,10 +42,15 @@ def test_only_on_linux_mint_with_cinnamon(ctx, monkeypatch):
 
 
 def test_servers_never_get_it():
-    cfg = Config(cinnamon=CinnamonConfig(enabled=True))
-    server = replace(cfg, profile=Profile(role="server"))
+    cfg = Config(cinnamon=CinnamonConfig(enabled=True), profile=Profile(cinnamon=True))
+    server = replace(cfg, profile=Profile(role="server", cinnamon=True))
     assert not resolve(server, nvidia_gpu=False).cinnamon.enabled
     assert resolve(cfg, nvidia_gpu=False).cinnamon.enabled
+
+
+def test_only_when_the_profile_said_yes():
+    cfg = Config(cinnamon=CinnamonConfig(enabled=True), profile=Profile(cinnamon=False))
+    assert not resolve(cfg, nvidia_gpu=False).cinnamon.enabled
 
 
 def test_plans_spices_settings_and_only_differing_dconf_keys(ctx):

@@ -85,6 +85,7 @@ class Profile:
     docker: bool = True
     heavy: bool = True  # apps marked `when: [heavy]`
     harden: HardenLevel = "none"  # scripts/mint/harden.sh; only asked on Linux Mint
+    cinnamon: bool = False  # apply desktop/cinnamon/; only asked on a Mint Cinnamon desktop
 
 
 @dataclass(frozen=True)
@@ -229,7 +230,9 @@ def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
         # Servers are reached over SSH: fonts belong on the client's terminal.
         fonts=config.fonts if holds["desktop"] else (),
         docker=replace(config.docker, enabled=docker),
-        cinnamon=replace(config.cinnamon, enabled=config.cinnamon.enabled and holds["desktop"]),
+        cinnamon=replace(
+            config.cinnamon, enabled=config.cinnamon.enabled and holds["desktop"] and profile.cinnamon
+        ),
         nvidia=replace(
             config.nvidia,
             enabled=config.nvidia.enabled if profile.gpu else False,

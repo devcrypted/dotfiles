@@ -5,14 +5,16 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from . import onboard, system
 from .adopt import AdoptError, adopt
 from .apt import Apt
-from .config import Config, ConfigError, load, resolve
+from .config import Config, ConfigError, Profile, load, resolve
 from .state import State, fingerprint
 from .system import CommandError, Facts, UnsupportedSystem, detect, sudo
 from .tasks import TASKS, Context, Task
@@ -86,6 +88,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     prof.add_argument("--role", choices=("desktop", "server"), help="server: CLI only, no GUI apps or fonts")
     for name, what in (("gpu", "NVIDIA driver + CUDA"), ("docker", "Docker Engine"), ("heavy", "heavy apps")):
         prof.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, help=what)
+    prof.add_argument(
+        "--harden",
+        choices=("none", "standard", "aggressive"),
+        help="Linux Mint: debloat and harden with scripts/mint/harden.sh",
+    )
     prof.add_argument("-y", "--yes", action="store_true", help="don't ask: use detected defaults")
     return p.parse_args(argv)
 
@@ -148,8 +155,22 @@ def _context(args: argparse.Namespace) -> Context:
 
 def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path) -> Config:
     """Make sure the config has a machine profile, asking for one on the first run."""
-    given = {k: getattr(args, k) for k in ("role", "gpu", "docker", "heavy") if getattr(args, k) is not None}
+    keys = [f.name for f in fields(Profile)]
+    given = {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
     fresh = config.profile is None
+    missing = frozenset() if fresh else _unanswered(path, keys)
+    if missing and args.command in ("apply", "plan") and not given:
+        # profile.yaml predates a question: ask just that one, keep the other answers.
+        tty = onboard.terminal() if not args.yes else None
+        profile = onboard.onboard(config, facts, given={}, tty=tty, only=missing)
+        if tty is None:
+            # Nobody to ask (CI, no terminal, -y): use the defaults for this run only, so
+            # the question is still asked the next time a terminal is attached.
+            answers = ", ".join(f"{k}: {getattr(profile, k)}" for k in sorted(missing))
+            print(f"note: {path.name} has no answer for {answers} (default, not saved); ./install.sh setup")
+        else:
+            onboard.save(path, profile)
+        return replace(config, profile=profile)
     if not (fresh or given or args.command == "setup"):
         return config
     if fresh and args.command == "status":
@@ -162,6 +183,15 @@ def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path)
     if tty is None and fresh:
         print(f"note: wrote {path.name} from detected defaults; edit it or run ./install.sh setup")
     return replace(config, profile=profile)
+
+
+def _unanswered(path: Path, keys: list[str]) -> frozenset[str]:
+    """Profile answers that ``path`` doesn't contain yet."""
+    try:
+        saved = (yaml.safe_load(path.read_text()) or {}).get("profile") or {}
+    except (OSError, yaml.YAMLError, AttributeError):
+        return frozenset()
+    return frozenset(k for k in keys if k not in saved)
 
 
 def _select(args: argparse.Namespace) -> list[Task]:
@@ -193,6 +223,8 @@ class Runner:
         if ctx.config.profile:
             p = ctx.config.profile
             extras = [name for name in ("gpu", "docker", "heavy") if getattr(p, name)]
+            if p.harden != "none":
+                extras.append("harden" if p.harden == "standard" else "harden:aggressive")
             print(self._paint("2", f"  profile: {p.role}{''.join(f' +{e}' for e in extras)} (profile.yaml)"))
 
         changed = unchanged = 0

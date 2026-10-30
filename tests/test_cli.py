@@ -78,7 +78,7 @@ def test_task_selection():
     assert _select(only=["links", "git"]) == ["links", "git"]
     assert "nvidia" not in _select(no_once=True)
     assert "nvidia" in _select(no_once=True, rerun=["nvidia"])
-    assert all(t in ("upgrade", "nvidia", "ssh") for t in _select(once_only=True))
+    assert all(t in ("upgrade", "cinnamon", "nvidia", "ssh", "harden") for t in _select(once_only=True))
     with pytest.raises(ConfigError, match="unknown task 'nope'"):
         _select(skip=["nope"])
 

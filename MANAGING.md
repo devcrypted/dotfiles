@@ -19,7 +19,9 @@ configured). Then commit. A new machine is just `git clone` + `./install.sh`.
 | Change the login shell or prompt | `shells.default`, `prompt` in `config.yaml` | |
 | Change what this machine is (desktop/server, GPU, Docker, heavy apps) | `./install.sh setup` | Rewrites `profile.yaml` (gitignored). |
 | Change something on one machine only | `config.local.yaml` (gitignored) | Merged over `config.yaml`; `key: null` removes a key. |
-| Add a Windows app | `windows/packages.json` | Then rerun `windows/install.ps1`. |
+| Add a Windows app | `windows/packages.json` | Then rerun `windows/install.ps1`. Store-only apps go in the `msstore` source by Store ID (`9NKSQGP7F2NH` is WhatsApp). |
+| Keep a Cinnamon desktop change (Linux Mint) | `scripts/mint/cinnamon-capture.sh` | Saves settings into `desktop/cinnamon/`; Spices applets and themes go in `cinnamon:` in `config.yaml`. |
+| Remove a preinstalled app or harden something | `scripts/mint/harden.sh`, `windows/harden.ps1` | Lists at the top of each script. `./install.sh` (the `harden` task) and `windows/install.ps1` run them again when the script changes. |
 | Automate something none of the above covers | A new task in `dotkit/tasks/` | See [Adding a task](#adding-a-task). |
 
 After any change: `./install.sh plan` to preview, `./install.sh` to apply, then commit.
@@ -129,4 +131,16 @@ service), add a task:
 3. Add a config key in `dotkit/config.py` if it needs one, and document it in
    `config.yaml`.
 4. Add a row to [FEATURES.md](FEATURES.md). A test fails until you do.
-5. Run the tests (see the README).
+5. Run the tests (see [Development](#development)).
+
+## Development
+
+```bash
+python3 -m pytest                                        # unit tests (pytest + PyYAML)
+ruff check . && ruff format --check .
+docker build -f tests/e2e/Dockerfile -t dotfiles-e2e . && docker run --rm dotfiles-e2e
+```
+
+The end-to-end test installs into a fresh container, checks that a second run makes
+zero changes, then edits the config and checks that only those changes are applied.
+CI runs it on Ubuntu 24.04 and Debian 12.

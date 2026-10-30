@@ -98,8 +98,60 @@ def test_cuda_repo_unknown_release_fails_clearly(make_ctx):
 
 
 def test_cuda_task_follows_resolved_config(make_ctx, monkeypatch):
-    monkeypatch.setattr(Apt, "installed", staticmethod(lambda names: set()))
+    monkeypatch.setattr(cuda, "interrupted", lambda: [])
+    monkeypatch.setattr(cuda, "nvcc_version", lambda: "")
     assert not Cuda().enabled(make_ctx(Config(nvidia=Nvidia(cuda=False))))
     ctx = make_ctx(Config(nvidia=Nvidia(cuda=True)))
     assert Cuda().enabled(ctx)
     assert [c.summary for c in Cuda().plan(ctx)] == ["install cuda-toolkit (several GB)"]
+
+
+def test_any_working_nvcc_means_cuda_is_installed(make_ctx, monkeypatch):
+    monkeypatch.setattr(cuda, "interrupted", lambda: [])
+    monkeypatch.setattr(cuda, "nvcc_version", lambda: "12.4")  # e.g. cuda-toolkit-12-4 or the runfile
+    assert Cuda().plan(make_ctx(Config(nvidia=Nvidia(cuda=True)))) == []
+
+
+def test_an_interrupted_install_is_finished_not_redownloaded(make_ctx, monkeypatch):
+    monkeypatch.setattr(cuda, "interrupted", lambda: ["cuda-toolkit-13-4", "cuda-nvcc-13-4"])
+    monkeypatch.setattr(cuda, "nvcc_version", lambda: "")
+    [change] = Cuda().plan(make_ctx(Config(nvidia=Nvidia(cuda=True))))
+    assert change.summary == "finish the interrupted CUDA install (2 package(s); no new downloads)"
+
+
+def test_interrupted_reads_dpkg_states(monkeypatch):
+    dpkg = (
+        "ii  cuda-cudart-13-4\niU  cuda-nvcc-13-4\niF  cuda-toolkit-13-4\niHR cuda-libs-13-4\nrc  cuda-old\n"
+    )
+    monkeypatch.setattr(cuda, "output", lambda argv, any_exit=False: dpkg)
+    assert cuda.interrupted() == ["cuda-nvcc-13-4", "cuda-toolkit-13-4", "cuda-libs-13-4"]
+
+
+def test_nvcc_version_needs_an_nvcc_that_runs(monkeypatch, tmp_path):
+    nvcc = tmp_path / "nvcc"
+    nvcc.write_text("#!/bin/sh\n")
+    nvcc.chmod(0o755)
+    monkeypatch.setattr(cuda.shutil, "which", lambda name: str(nvcc))
+    monkeypatch.setattr(cuda.Path, "glob", lambda self, pattern: iter(()))
+    monkeypatch.setattr(cuda, "output", lambda argv: "Cuda compilation tools, release 13.4, V13.4.92\n")
+    assert cuda.nvcc_version() == "13.4"
+    monkeypatch.setattr(cuda, "output", lambda argv: "")  # broken binary
+    assert cuda.nvcc_version() == ""
+
+
+@pytest.mark.parametrize(
+    ("loaded", "flavor", "expected"),
+    [
+        ("NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.99.02", "open", True),
+        ("NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.99.02", "proprietary", False),
+        ("NVRM version: NVIDIA UNIX x86_64 Kernel Module  595.99.02", "proprietary", True),
+    ],
+)
+def test_a_running_driver_counts_as_installed(make_ctx, tmp_path, monkeypatch, loaded, flavor, expected):
+    from dotkit.tasks import nvidia
+
+    monkeypatch.setattr(Apt, "installed", staticmethod(lambda names: set()))
+    version = tmp_path / "version"
+    version.write_text(loaded + "\n")
+    assert nvidia._driver_installed(make_ctx(), flavor, version) is expected
+    assert nvidia._driver_installed(make_ctx(), flavor, tmp_path / "absent") is False

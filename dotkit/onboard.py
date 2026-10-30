@@ -26,7 +26,9 @@ COMMENTS = {
     "gpu": "NVIDIA driver + CUDA (only used when an NVIDIA GPU is present)",
     "docker": "Docker Engine",
     "heavy": "apps marked `when: [heavy]` in config.yaml",
+    "harden": "none | standard | aggressive: scripts/mint/harden.sh (Linux Mint only)",
 }
+MINT = "linuxmint"
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,7 @@ def defaults(facts: Facts, hw: Hardware, role: str | None = None) -> Profile:
         gpu=bool(hw.gpu),
         docker=desktop and hw.ram_gb >= 4,
         heavy=desktop and hw.ram_gb >= 8,
+        harden="standard" if facts.distro_id == MINT and not facts.wsl else "none",
     )
 
 
@@ -76,29 +79,39 @@ def onboard(
     given: dict[str, object],
     tty: TextIO | None,
     hw: Hardware | None = None,
+    only: frozenset[str] | None = None,
 ) -> Profile:
     """Build this machine's profile.
 
     Precedence per answer: ``given`` (command line flags), then the user's reply when
     ``tty`` is set, then the saved profile, then detected defaults. With a saved
     profile, the questions are asked with its answers as the defaults.
+
+    ``only`` limits the questions to these answers, which the saved profile lacks
+    (it was written before they existed); the rest are kept as saved.
     """
     hw = hw or Hardware.probe(facts)
     saved = config.profile
-    ask = _Asker(tty) if tty else None
-    if ask:
-        print("\nUpdating this machine's profile." if saved else "\nThis machine has no profile yet.")
+    asker = _Asker(tty) if tty else None
+    if asker:
+        if only:
+            print("\nThis machine's profile is missing newer questions.")
+        else:
+            print("\nUpdating this machine's profile." if saved else "\nThis machine has no profile yet.")
         print(f"Detected: {hw.describe(facts)}")
         print("Answers are saved to profile.yaml. Enter keeps the [default].\n")
 
+    def asking(key: str) -> _Asker | None:
+        return asker if only is None or key in only else None
+
     def default(key: str, detected: object) -> object:
-        return getattr(saved, key) if saved else detected
+        return getattr(saved, key) if saved and not (only and key in only) else detected
 
     if "role" in given:
         role = str(given["role"])
     else:
         role = default("role", defaults(facts, hw).role)
-        if ask:
+        if ask := asking("role"):
             role = ask.choice(
                 "Desktop or server? A server gets CLI tools only (no GUI apps, no fonts).",
                 {"d": "desktop", "s": "server"},
@@ -108,20 +121,20 @@ def onboard(
 
     if not hw.gpu:
         gpu = False
-        if ask:
+        if asking("gpu"):
             print("  - No NVIDIA GPU found: the driver and CUDA are skipped.")
     elif "gpu" in given:
         gpu = given["gpu"]
     else:
         gpu = default("gpu", base.gpu)
-        if ask:
+        if ask := asking("gpu"):
             gpu = ask.yes(f"Install the NVIDIA driver and CUDA for the {hw.gpu}?", gpu)
 
     if "docker" in given:
         docker = given["docker"]
     else:
         docker = default("docker", base.docker)
-        if ask:
+        if ask := asking("docker"):
             docker = ask.yes("Install Docker?", docker)
 
     heavy_apps = [
@@ -133,13 +146,28 @@ def onboard(
         heavy = given["heavy"]
     else:
         heavy = default("heavy", base.heavy)
-        if ask and heavy_apps:
+        if (ask := asking("heavy")) and heavy_apps:
             low_ram = f" Only {hw.ram_gb} GB RAM here." if hw.ram_gb < 8 else ""
             heavy = ask.yes(f"Install heavy apps ({', '.join(heavy_apps)})?{low_ram}", heavy)
-    if ask:
+
+    if facts.distro_id != MINT or facts.wsl:
+        harden = "none"  # harden.sh knows Mint's packages and services only
+    elif "harden" in given:
+        harden = str(given["harden"])
+    else:
+        harden = default("harden", base.harden)
+        if ask := asking("harden"):
+            harden = ask.choice(
+                "Debloat and harden Linux Mint? Standard removes unused preinstalled apps and "
+                "crash reporters, turns on the firewall and kernel hardening; aggressive also "
+                "removes LibreOffice, Firefox and more (details: scripts/mint/harden.sh --help).",
+                {"s": "standard", "a": "aggressive", "n": "none"},
+                harden,
+            )
+    if asker:
         print()
 
-    return Profile(role=role, gpu=bool(gpu), docker=bool(docker), heavy=bool(heavy))  # type: ignore[arg-type]
+    return Profile(role=role, gpu=bool(gpu), docker=bool(docker), heavy=bool(heavy), harden=harden)  # type: ignore[arg-type]
 
 
 def save(path: Path, profile: Profile) -> None:

@@ -51,10 +51,14 @@ class Nvidia(Task):
         return changes
 
 
-def _driver_installed(ctx: Context, flavor: str) -> bool:
+def _driver_installed(ctx: Context, flavor: str, loaded: Path = Path("/proc/driver/nvidia/version")) -> bool:
+    # A running driver counts too, however it was installed (e.g. NVIDIA's .run file).
+    running = _read(str(loaded))
+    if running:
+        return ("Open Kernel Module" in running) == (flavor == "open")
     installed = ctx.apt.installed(["nvidia-driver-*", "nvidia-open", "cuda-drivers"])
     is_open = [name.endswith("-open") for name in installed]
-    return any(is_open) if flavor == "open" else not all(is_open)
+    return any(is_open) if flavor == "open" else bool(installed) and not all(is_open)
 
 
 def _install_ubuntu(ctx: Context) -> None:

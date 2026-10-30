@@ -17,7 +17,7 @@ shells:
 prompt: starship # starship | builtin (no dependencies; shows path, git branch, exit status)
 
 # Dotfile modules to link from home/<module>/ (shell modules follow shells.install).
-modules: [git, nvim, tmux, starship, kind]
+modules: [git, nvim, tmux, starship, kind, ghostty]
 
 # apt packages from the distro archive, on every machine (desktop apps go in `apps`).
 # Removing one here does not uninstall it.
@@ -113,6 +113,43 @@ apps:
   azure-cli: {when: [heavy], mise: {azure: latest}}
 
 fonts: [JetBrainsMono] # Nerd Fonts for prompt icons (skipped on WSL and servers)
+
+# Linux Mint Cinnamon look and feel. Applied only on a desktop profile running Linux
+# Mint with Cinnamon installed; everywhere else it is ignored. Besides these lists it
+# loads desktop/cinnamon/ (panels, themes, shortcuts, gestures, Nemo, applet settings),
+# saved from a configured machine by scripts/mint/cinnamon-capture.sh.
+# Applies once, then again only when this section or desktop/cinnamon/ changes.
+cinnamon:
+  enabled: true
+  applets: # from cinnamon-spices.linuxmint.com/applets
+    - Cinnamenu@json # menu with search, categories, favorites
+    - collapsible-systray@feuerfuchs.eu
+    - gpaste-reloaded@feuerfuchs.eu # clipboard history
+    - ScreenShot+RecordDesktop@tech71
+  themes: # from cinnamon-spices.linuxmint.com/themes
+    - Orchis-Dark
+    - Adapta
+    - Adapta-Nokto
+    - CBlack
+    - New-Minty
+    - Numix-Cinnamon-Semi-Transparent
+    - Numix-Cinnamon-Transparent
+    - Orchidea
+    - Vivaldi
+  packages: # apt: icon and cursor themes the settings use, applet dependencies
+    - yaru-theme-icon # Yaru-bark icons
+    - mint-cursor-themes # Bibata cursors
+    - gpaste-2 # for gpaste-reloaded
+    - gir1.2-gpaste-2
+
+# Linux Mint debloat and hardening (scripts/mint/harden.sh). Each Mint machine's profile
+# chooses the level (asked on the first run: standard | aggressive | none; change it with
+# `./install.sh setup` or --harden). Runs once, then again when the level, this section
+# or the script changes. Preview it any time: scripts/mint/harden.sh
+harden:
+  # Sections to leave alone on every machine:
+  # debloat, telemetry, services, firewall, kernel, updates, desktop, cleanup
+  skip: []
 
 # Aliases become `alias` in bash/zsh and `abbr` in fish.
 aliases:

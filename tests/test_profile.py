@@ -180,3 +180,47 @@ def test_saved_profile_round_trips(tmp_path):
     onboard.save(path, profile)
     (tmp_path / "config.yaml").write_text("")
     assert load(tmp_path / "config.yaml", profile=path).profile == profile
+
+
+MINT = replace(FACTS, distro_id="linuxmint")
+
+
+def test_harden_is_asked_on_linux_mint_only(capsys):
+    assert onboard.onboard(BASE, MINT, given={}, tty=None, hw=DESKTOP).harden == "standard"
+    assert _onboard(None, DESKTOP).harden == "none"  # Ubuntu: not asked
+    answers = io.StringIO("d\ny\ny\ny\na\n")
+    assert onboard.onboard(BASE, MINT, given={}, tty=answers, hw=DESKTOP).harden == "aggressive"
+    assert "Debloat and harden Linux Mint?" in capsys.readouterr().out
+
+
+def test_only_the_missing_question_is_asked(capsys):
+    saved = Profile(role="server", gpu=False, docker=False, heavy=False)
+    config = replace(BASE, profile=saved)
+    profile = onboard.onboard(
+        config, MINT, given={}, tty=io.StringIO("n\n"), hw=DESKTOP, only=frozenset({"harden"})
+    )
+    assert profile == replace(saved, harden="none")
+    out = capsys.readouterr().out
+    assert "missing newer questions" in out and "Docker" not in out
+
+
+def test_missing_answers_get_the_detected_default_without_a_terminal():
+    config = replace(BASE, profile=Profile())
+    profile = onboard.onboard(config, MINT, given={}, tty=None, hw=DESKTOP, only=frozenset({"harden"}))
+    assert profile.harden == "standard"
+
+
+def test_unanswered_lists_keys_an_old_profile_lacks(tmp_path):
+    from dotkit.cli import _unanswered
+
+    path = tmp_path / "profile.yaml"
+    path.write_text("profile:\n  role: desktop\n  gpu: true\n  docker: true\n  heavy: true\n")
+    assert _unanswered(path, ["role", "gpu", "docker", "heavy", "harden"]) == {"harden"}
+    onboard.save(path, Profile(harden="aggressive"))
+    assert _unanswered(path, ["role", "harden"]) == frozenset()
+    assert load_profile(path).harden == "aggressive"
+
+
+def load_profile(path):
+    (path.parent / "config.yaml").write_text("")
+    return load(path.parent / "config.yaml", profile=path).profile

@@ -19,16 +19,18 @@ They run again when their config section changes or with `--rerun <task>`.
 | `mise` | always | Installs [mise](https://mise.jdx.dev) and syncs global `tools` (runtimes and CLIs, matching your CPU architecture). Tools removed from config are uninstalled. |
 | `fonts` | always | Installs each Nerd Font in `fonts` to `~/.local/share/fonts`. Skipped on WSL and on servers. |
 | `apps` | always | Installs the `apps` this machine's profile selects that come as a flatpak (Flathub, system-wide), a `.deb` download or an install script. Their `apt`, `apt_repo` and `mise` parts are installed by `packages`, `repos` and `mise`. One app failing is reported at the end and doesn't stop the run. |
+| `cinnamon` | one-time | Only on a desktop profile running Linux Mint with Cinnamon installed. Downloads the `cinnamon.applets` and `cinnamon.themes` from [Cinnamon Spices](https://cinnamon-spices.linuxmint.com), installs `cinnamon.packages`, copies the saved applet settings in `desktop/cinnamon/spices/` and loads `desktop/cinnamon/dconf.ini` (panels, themes, shortcuts, gestures, Nemo). Runs again when either changes; `scripts/mint/cinnamon-capture.sh` saves the current desktop into the repo. |
 | `docker` | always | Installs Docker Engine (with buildx and compose) from download.docker.com unless a `docker` CLI already exists. If the existing Docker lacks buildx, installs the matching package. Adds you to the `docker` group. |
-| `nvidia` | one-time | When the profile says yes to the GPU and an NVIDIA GPU is present (and not WSL): installs the open or proprietary driver (`ubuntu-drivers` on Ubuntu/Mint, the CUDA repo on Debian), plus `nvidia-container-toolkit` registered with Docker when Docker is installed. |
-| `cuda` | always | Same conditions, WSL included, with `nvidia.cuda: true`: installs `cuda-toolkit` from NVIDIA's repo for this release and puts `/usr/local/cuda/bin` on `PATH`. |
+| `nvidia` | one-time | When the profile says yes to the GPU and an NVIDIA GPU is present (and not WSL): installs the open or proprietary driver (`ubuntu-drivers` on Ubuntu/Mint, the CUDA repo on Debian) unless a driver of that flavor is already running or installed, plus `nvidia-container-toolkit` registered with Docker when Docker is installed. |
+| `cuda` | always | Same conditions, WSL included, with `nvidia.cuda: true`: installs `cuda-toolkit` from NVIDIA's repo for this release and puts `/usr/local/cuda/bin` on `PATH`. Skipped when any working `nvcc` exists, however it was installed. An interrupted install is finished from the packages already downloaded instead of starting over, and every install is checked by running `nvcc --version`. |
 | `ssh` | one-time | Creates `~/.ssh/id_ed25519` if it doesn't exist. |
 | `sudo` | always | `sudo_nopasswd: true` adds a `visudo`-validated `/etc/sudoers.d/90-dotfiles`; switching it back to `false` removes it. |
+| `harden` | one-time | Linux Mint only, when the profile's `harden` answer is `standard` or `aggressive`: runs [`scripts/mint/harden.sh`](scripts/mint/harden.sh). It purges unused preinstalled apps (never one apt would take Mint or Cinnamon down with) and crash reporters, stops network discovery services, hardens sshd, turns on ufw, applies kernel/network sysctl hardening, turns off core dumps, enables automatic updates and cleans caches and logs. `harden.skip` in `config.yaml` leaves sections alone. Runs again when the answer, the skip list or the script changes. |
 
 ## Machine profile
 
 The first `./install.sh` (or `plan`) on a machine detects its hardware (RAM, CPUs,
-NVIDIA GPU, desktop session) and asks up to four questions. The answers go into
+NVIDIA GPU, desktop session) and asks up to five questions. The answers go into
 `profile.yaml` (gitignored), so they're asked only once:
 
 | Question | Default | Effect |
@@ -37,10 +39,12 @@ NVIDIA GPU, desktop session) and asks up to four questions. The answers go into
 | NVIDIA driver and CUDA? | yes; not asked without an NVIDIA GPU | `nvidia`, `cuda` and `when: [gpu]` apps. |
 | Docker? | yes on a desktop with 4 GB+ RAM, no on a server | `docker` and `when: [docker]` apps. |
 | Heavy apps? | yes on a desktop with 8 GB+ RAM, no on a server | `when: [heavy]` apps. |
+| Debloat and harden? | `standard`; only asked on Linux Mint (elsewhere `none`) | `standard`, `aggressive` or `none` for the `harden` task. |
 
-`./install.sh setup` asks again with the saved answers as defaults. Flags answer
+`./install.sh setup` asks again with the saved answers as defaults. When a newer version of
+this repo adds a question, the next run asks only that one and keeps the other answers. Flags answer
 without asking and are saved too: `--role desktop|server`, `--gpu`/`--no-gpu`,
-`--docker`/`--no-docker`, `--heavy`/`--no-heavy`, and `-y` to take the detected
+`--docker`/`--no-docker`, `--heavy`/`--no-heavy`, `--harden none|standard|aggressive`, and `-y` to take the detected
 defaults for anything not given. Without a terminal (CI, cloud-init) the detected
 defaults are used and saved. `config.yaml` can still veto: `docker.enabled: false` or
 `nvidia.enabled: false` wins over a profile that says yes.

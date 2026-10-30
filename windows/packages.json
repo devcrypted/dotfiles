@@ -80,6 +80,88 @@
         },
         {
           "PackageIdentifier": "Mozilla.Firefox"
+        },
+        {
+          "PackageIdentifier": "Microsoft.WSL"
+        },
+        {
+          "PackageIdentifier": "Brave.Brave"
+        },
+        {
+          "PackageIdentifier": "Bitwarden.Bitwarden"
+        },
+        {
+          "PackageIdentifier": "Bitwarden.CLI"
+        },
+        {
+          "PackageIdentifier": "RedHat.Podman"
+        },
+        {
+          "PackageIdentifier": "RedHat.Podman-Desktop"
+        },
+        {
+          "PackageIdentifier": "Anthropic.ClaudeCode"
+        },
+        {
+          "PackageIdentifier": "SST.opencode"
+        },
+        {
+          "PackageIdentifier": "astral-sh.uv"
+        },
+        {
+          "PackageIdentifier": "pnpm.pnpm"
+        },
+        {
+          "PackageIdentifier": "Kubernetes.kind"
+        },
+        {
+          "PackageIdentifier": "ajeetdsouza.zoxide"
+        },
+        {
+          "PackageIdentifier": "eza-community.eza"
+        },
+        {
+          "PackageIdentifier": "sharkdp.bat"
+        },
+        {
+          "PackageIdentifier": "sharkdp.fd"
+        },
+        {
+          "PackageIdentifier": "BurntSushi.ripgrep.MSVC"
+        },
+        {
+          "PackageIdentifier": "jqlang.jq"
+        },
+        {
+          "PackageIdentifier": "Microsoft.Sysinternals.Suite"
+        },
+        {
+          "PackageIdentifier": "voidtools.Everything"
+        },
+        {
+          "PackageIdentifier": "Klocman.BulkCrapUninstaller"
+        },
+        {
+          "PackageIdentifier": "OO-Software.ShutUp10"
+        },
+        {
+          "PackageIdentifier": "ShareX.ShareX"
+        },
+        {
+          "PackageIdentifier": "VideoLAN.VLC"
+        }
+      ]
+    },
+    {
+      "SourceDetails": {
+        "Name": "msstore",
+        "Identifier": "StoreEdgeFD",
+        "Argument": "https://storeedgefd.dsx.mp.microsoft.com/v9.0",
+        "Type": "Microsoft.Rest"
+      },
+      "Packages": [
+        {
+          "PackageIdentifier": "9NKSQGP7F2NH"
         }
       ]
     }

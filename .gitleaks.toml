@@ -17,6 +17,9 @@ regexes = [
   '''@example\.(?:com|org|net)$''',
   '''@users\.noreply\.github\.com$''',
   '''^(?:no-?reply|git)@''',
+  # Cinnamon Spices UUIDs (name@author) in config.yaml and desktop/cinnamon/; add the
+  # author's domain here when a new applet trips this rule.
+  '''^[A-Za-z0-9._+-]+@(?:cinnamon\.org|feuerfuchs\.eu)$''',
 ]
 
 [[rules]]

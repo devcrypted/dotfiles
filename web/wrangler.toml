@@ -1,0 +1,8 @@
+# Short install URL: https://dot.kamal.sh (see worker.js). Deploy: wrangler deploy
+name = "dotfiles-installer"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+# Cloudflare creates the DNS record and certificate for this hostname on deploy.
+routes = [{ pattern = "dot.kamal.sh", custom_domain = true }]

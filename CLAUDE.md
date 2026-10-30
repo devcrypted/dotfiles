@@ -18,8 +18,20 @@ idempotent: it plans the changes, applies only what differs, and a second run ch
   parts into `packages`, `apt_repos` and `tools`.
 - `dotkit/tasks/`: one file per task, registered in run order in `tasks/__init__.py`.
 - `home/<module>/`: config files symlinked into `$HOME`.
-- Docs: `README.md` (usage), `FEATURES.md` (one row per task, checked by a test),
-  `MANAGING.md` (where each kind of change goes), `CLOUD.md` (Claude Code cloud environments).
+- `desktop/cinnamon/`: Linux Mint Cinnamon settings (`dconf.ini`, applet settings), applied
+  by the `cinnamon` task only on a desktop profile running Mint with Cinnamon. Regenerate
+  with `scripts/mint/cinnamon-capture.sh`; never commit location or device IDs from dconf.
+- `scripts/mint/harden.sh`: Mint debloat/hardening, run by the `harden` task at the level the
+  profile's `harden` answer picks (`none | standard | aggressive`). Its preview output
+  (lines starting `~`) is the task's plan, so keep that format.
+- `windows/install.ps1`: the whole Windows setup: winget apps from `windows/packages.json`,
+  WSL, then `windows/harden.ps1`. Its answers live in `%ProgramData%\dotfiles\profile.json`.
+- `web/`: Cloudflare Worker for `https://dot.kamal.sh`, the short URL for both installers
+  (`install.sh` for curl, `windows/install.ps1` for PowerShell). `install.sh` must keep
+  working when piped (`curl | bash`): everything stays inside `main()`.
+- Docs: `README.md` (quick start only; keep it minimal), `USAGE.md` (commands, flags, Mint,
+  Windows), `FEATURES.md` (one row per task, checked by a test), `MANAGING.md` (where each
+  kind of change goes, development), `CLOUD.md` (Claude Code cloud environments).
 
 ## Adding an application
 

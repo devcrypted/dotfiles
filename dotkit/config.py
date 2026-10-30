@@ -25,6 +25,10 @@ _REPO_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # Conditions an app's `when` may list; each one is a profile answer (see Profile).
 Condition = Literal["desktop", "server", "heavy", "docker", "gpu"]
+HardenLevel = Literal["none", "standard", "aggressive"]  # not "off": YAML reads that as false
+HardenSection = Literal[
+    "debloat", "telemetry", "services", "firewall", "kernel", "updates", "desktop", "cleanup"
+]
 CUDA_PATH = "/usr/local/cuda/bin"
 
 
@@ -80,6 +84,7 @@ class Profile:
     gpu: bool = True  # NVIDIA driver + CUDA, only when such a GPU is present
     docker: bool = True
     heavy: bool = True  # apps marked `when: [heavy]`
+    harden: HardenLevel = "none"  # scripts/mint/harden.sh; only asked on Linux Mint
 
 
 @dataclass(frozen=True)
@@ -109,6 +114,23 @@ class App:
 
 
 @dataclass(frozen=True)
+class Cinnamon:
+    """Linux Mint Cinnamon look and feel; only used on a desktop running Mint + Cinnamon."""
+
+    enabled: bool = False
+    applets: tuple[str, ...] = ()  # Spices applet UUIDs
+    themes: tuple[str, ...] = ()  # Spices theme names
+    packages: tuple[str, ...] = ()  # icon/cursor themes and applet dependencies
+
+
+@dataclass(frozen=True)
+class Harden:
+    """Linux Mint debloat and hardening; the profile's `harden` answer turns it on."""
+
+    skip: tuple[HardenSection, ...] = ()
+
+
+@dataclass(frozen=True)
 class Ssh:
     generate_key: bool = True
 
@@ -131,6 +153,8 @@ class Config:
     docker: Docker = field(default_factory=Docker)
     nvidia: Nvidia = field(default_factory=Nvidia)
     ssh: Ssh = field(default_factory=Ssh)
+    cinnamon: Cinnamon = field(default_factory=Cinnamon)
+    harden: Harden = field(default_factory=Harden)
     sudo_nopasswd: bool = False
     pre_commit: bool = True
     blocked_words: tuple[str, ...] = ()
@@ -205,6 +229,7 @@ def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
         # Servers are reached over SSH: fonts belong on the client's terminal.
         fonts=config.fonts if holds["desktop"] else (),
         docker=replace(config.docker, enabled=docker),
+        cinnamon=replace(config.cinnamon, enabled=config.cinnamon.enabled and holds["desktop"]),
         nvidia=replace(
             config.nvidia,
             enabled=config.nvidia.enabled if profile.gpu else False,

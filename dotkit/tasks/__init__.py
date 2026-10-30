@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from .apps import Apps
 from .base import Change, Context, Task
+from .cinnamon import Cinnamon
 from .cuda import Cuda
 from .docker import Docker
 from .fonts import Fonts
 from .git import Git
+from .harden import Harden
 from .hooks import Hooks
 from .links import Links
 from .mise import Mise
@@ -32,11 +34,13 @@ TASKS: tuple[Task, ...] = (
     Mise(),
     Fonts(),
     Apps(),
+    Cinnamon(),  # after apps: the panel's favorites and shortcuts point at them
     Docker(),
     Nvidia(),  # after docker: the container toolkit registers itself with Docker
     Cuda(),  # after nvidia: on Debian both use NVIDIA's CUDA repo
     Ssh(),
     Sudo(),
+    Harden(),  # last: removes preinstalled apps, then locks down the firewall and kernel
 )
 
 __all__ = ["TASKS", "Change", "Context", "Task"]

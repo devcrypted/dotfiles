@@ -3,79 +3,33 @@
 One YAML file describes a machine. `./install.sh` makes the machine match it, and it
 is safe to rerun at any time: it changes only what differs from the config.
 
-- What it manages, task by task: **[FEATURES.md](FEATURES.md)**
-- Where to make a change (new tool, new config file, new machine): **[MANAGING.md](MANAGING.md)**
-- Claude Code cloud environments: **[CLOUD.md](CLOUD.md)**
-
 ## Linux / WSL (Debian 12+, Ubuntu 24.04+, Mint, …)
 
 ```bash
-git clone https://github.com/devcrypted/dotfiles.git ~/dotfiles
-cd ~/dotfiles
-$EDITOR config.yaml        # shells, packages, tools, apps, aliases, …
-./install.sh plan          # asks about this machine on the first run, then previews
-./install.sh               # apply
+curl -fsSL https://dot.kamal.sh | bash
 ```
 
-The first run checks the hardware and asks a few questions: desktop or server, NVIDIA
-driver and CUDA (only if there's an NVIDIA GPU), Docker, and heavy apps. The answers
-are saved in `profile.yaml` (gitignored) and pick which `apps` this machine gets: a
-server gets CLI tools only. For an unattended install, answer with flags:
-
-```bash
-./install.sh --role server --no-docker --no-heavy    # or -y for the detected defaults
-```
-
-Run it as your normal user, not with `sudo`. It asks for your password when it
-needs root, and a run with nothing to change never asks.
-
-| Command | Effect |
-| --- | --- |
-| `./install.sh` | Apply everything, including pending one-time tasks |
-| `./install.sh plan` | Show every change it would make |
-| `./install.sh status` | One line per task: ok, pending, or done (one-time) |
-| `./install.sh setup` | Answer the machine profile questions again |
-| `./install.sh --role server --no-docker` | Set profile answers without asking (saved) |
-| `./install.sh --no-once` | Routine sync: skip one-time tasks |
-| `./install.sh --once-only` | Only the one-time tasks |
-| `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |
-| `./install.sh --only links,mise` / `--skip docker` | Pick tasks |
-| `./install.sh cloud` | Set up a Claude Code cloud VM ([CLOUD.md](CLOUD.md)) |
-| `./install.sh adopt ~/.config/<tool>` | Move a tool's config into the repo and link it back |
-| `./install.sh -v` | Print each command and its output |
-
-### Making it yours
-
-Fork, edit `config.yaml` (every key is commented) and rerun. Put per-machine
-overrides in `config.local.yaml` (gitignored). The full workflow for adding tools and
-config files is in [MANAGING.md](MANAGING.md).
-
-## Claude Code cloud environments
-
-`./install.sh cloud` sets up a Claude Code cloud VM from [`cloud.yaml`](cloud.yaml).
-**[CLOUD.md](CLOUD.md)** walks through each field of the environment dialog: network
-access, network secrets, environment variables and the two-line setup script.
+It clones this repo to `~/dotfiles`, asks a few questions about the machine, and sets
+it up. Run it as your normal user, not with `sudo`. Later runs: `~/dotfiles/install.sh`
+(`plan` to preview first).
 
 ## Windows
 
-From an elevated PowerShell, this installs the apps in
-[`windows/packages.json`](windows/packages.json) and sets up WSL with Ubuntu 24.04:
+From an elevated Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/devcrypted/dotfiles/main/windows/install.ps1 | iex
+irm https://dot.kamal.sh | iex
 ```
 
-From a clone, `.\windows\install.ps1 -SkipWsl` or `-SkipApps` runs only one half.
-Then open Ubuntu and follow the Linux steps above.
+It installs the apps, sets up WSL with Ubuntu 24.04, and debloats and hardens Windows
+(asks first). Then open Ubuntu and run the Linux steps above.
 
-## Development
+## More
 
-```bash
-python3 -m pytest                                        # unit tests (pytest + PyYAML)
-ruff check . && ruff format --check .
-docker build -f tests/e2e/Dockerfile -t dotfiles-e2e . && docker run --rm dotfiles-e2e
-```
-
-The end-to-end test installs into a fresh container, checks that a second run makes
-zero changes, then edits the config and checks that only those changes are applied.
-CI runs it on Ubuntu 24.04 and Debian 12.
+| Doc | What's in it |
+| --- | --- |
+| [USAGE.md](USAGE.md) | Every command and flag, Linux Mint desktop and hardening, Windows options |
+| [FEATURES.md](FEATURES.md) | What each task does, the machine profile questions, commit checks |
+| [MANAGING.md](MANAGING.md) | Where each kind of change goes, adding apps and tasks, development |
+| [CLOUD.md](CLOUD.md) | Claude Code cloud environments |
+| [web/README.md](web/README.md) | How `dot.kamal.sh` serves the installers |

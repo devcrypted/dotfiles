@@ -28,7 +28,9 @@ def test_defaults_from_empty_file(tmp_path):
 
 def test_full_example_parses(tmp_path):
     cfg = _load(
-        tmp_path, Path("config.yaml").read_text(), modules=["git", "nvim", "tmux", "starship", "kind"]
+        tmp_path,
+        Path("config.yaml").read_text(),
+        modules=["git", "nvim", "tmux", "starship", "kind", "ghostty"],
     )
     assert cfg.shells.default == "fish"
     assert all(isinstance(v, str) for v in cfg.tools.values())

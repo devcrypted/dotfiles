@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import tempfile
 from functools import partial
 from pathlib import Path
 
-from ..system import CommandError, fetch, run
+from ..system import CommandError, fetch, output, run
 from .base import Change, Context, Task
 
 REPOS = "https://developer.download.nvidia.com/compute/cuda/repos"
@@ -24,9 +27,47 @@ class Cuda(Task):
         return ctx.config.nvidia.cuda
 
     def plan(self, ctx: Context) -> list[Change]:
-        if ctx.apt.installed(["cuda-toolkit"]):
+        # An interrupted install has its packages downloaded already: finish it rather
+        # than starting over.
+        broken = interrupted()
+        if broken:
+            summary = f"finish the interrupted CUDA install ({len(broken)} package(s); no new downloads)"
+            return [Change(summary, partial(_repair, ctx))]
+        # Any working nvcc counts, however it was installed (NVIDIA's repo, a versioned
+        # cuda-toolkit-X-Y package, Ubuntu's nvidia-cuda-toolkit or the runfile).
+        if nvcc_version():
             return []
         return [Change("install cuda-toolkit (several GB)", partial(_install, ctx))]
+
+
+def nvcc_version() -> str:
+    """Version of the first nvcc that actually runs ("13.4"), or "" when there is none."""
+    candidates = [
+        shutil.which("nvcc"),
+        "/usr/local/cuda/bin/nvcc",
+        *sorted(map(str, Path("/usr/local").glob("cuda-*/bin/nvcc")), reverse=True),
+        "/usr/bin/nvcc",
+    ]
+    for path in dict.fromkeys(c for c in candidates if c):
+        if os.access(path, os.X_OK):
+            match = re.search(r"release (\d+\.\d+)", output([path, "--version"]))
+            if match:
+                return match.group(1)
+    return ""
+
+
+def interrupted() -> list[str]:
+    """CUDA packages dpkg left unpacked, half-configured or needing reinstall."""
+    lines = output(
+        ["dpkg-query", "-W", "-f=${db:Status-Abbrev} ${Package}\n", "cuda-*", "nvidia-cuda-*"], any_exit=True
+    )
+    broken = []
+    for line in lines.splitlines():
+        # "${db:Status-Abbrev}" is 3 characters (desired, state, error), e.g. "iU ".
+        status, name = line[:3], line[3:].strip()
+        if name and (status[1:2] in ("U", "F", "H", "W", "t") or status[2:3] == "R"):
+            broken.append(name)
+    return broken
 
 
 def repo_url(ctx: Context) -> str:
@@ -58,4 +99,24 @@ def add_repo(ctx: Context) -> None:
 def _install(ctx: Context) -> None:
     add_repo(ctx)
     ctx.apt.install(["cuda-toolkit"])
-    ctx.note("CUDA installed in /usr/local/cuda; open a new shell to get nvcc on PATH.")
+    _verify(ctx)
+
+
+def _repair(ctx: Context) -> None:
+    run(["dpkg", "--configure", "-a"], root=True, env={"DEBIAN_FRONTEND": "noninteractive"})
+    # apt reuses the .debs already in /var/cache/apt/archives, so this only downloads
+    # what an interrupted download never finished.
+    run(["apt-get", "install", "-f", "-y"], root=True, env={"DEBIAN_FRONTEND": "noninteractive"})
+    if not nvcc_version():
+        _install(ctx)
+        return
+    _verify(ctx)
+
+
+def _verify(ctx: Context) -> None:
+    version = nvcc_version()
+    if not version:
+        raise CommandError(
+            ["nvcc", "--version"], 1, "cuda-toolkit is installed but no working nvcc was found"
+        )
+    ctx.note(f"CUDA {version} is in /usr/local/cuda; open a new shell to get nvcc on PATH.")

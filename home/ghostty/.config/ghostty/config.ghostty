@@ -1,0 +1,97 @@
+# Ghostty (https://ghostty.org/docs/config). Reload: ctrl+shift+, | Check: ghostty +validate-config
+# Every option with its docs: ghostty +show-config --default --docs
+# Machine-only tweaks go in config.local.ghostty next to this file (not tracked).
+
+# --- Look ---------------------------------------------------------------------------
+# Follows the desktop's light/dark preference. Browse: ghostty +list-themes
+theme = light:Ayu Light,dark:Ayu
+font-family = JetBrainsMono Nerd Font
+font-size = 14
+font-feature = calt
+font-feature = liga
+font-thicken = true
+adjust-cell-height = 10%
+# Keeps text readable on themes with low-contrast colors
+minimum-contrast = 1.1
+background-opacity = 0.96
+unfocused-split-opacity = 0.85
+window-padding-x = 10
+window-padding-y = 8
+window-padding-balance = true
+window-padding-color = extend
+# Titlebar and tabs follow the terminal colors
+window-theme = ghostty
+window-width = 140
+window-height = 38
+gtk-titlebar-hide-when-maximized = true
+gtk-wide-tabs = false
+cursor-style = bar
+cursor-style-blink = true
+scrollbar = system
+resize-overlay = after-first
+
+# --- Behaviour ----------------------------------------------------------------------
+shell-integration = detect
+# cursor shape per mode, sudo keeps terminfo, title from the running command, and
+# over ssh: install Ghostty's terminfo on the host (cached) with an xterm fallback.
+shell-integration-features = cursor,sudo,title,ssh-env,ssh-terminfo
+# Bytes (~100 MB) per terminal
+scrollback-limit = 100000000
+working-directory = inherit
+window-inherit-working-directory = true
+window-new-tab-position = end
+# Only asks when something is still running
+confirm-close-surface = true
+quit-after-last-window-closed = true
+mouse-hide-while-typing = true
+mouse-scroll-multiplier = 2
+focus-follows-mouse = false
+link-url = true
+link-previews = osc8
+
+# --- Clipboard ----------------------------------------------------------------------
+copy-on-select = clipboard
+clipboard-read = allow
+clipboard-write = allow
+clipboard-trim-trailing-spaces = true
+# Confirm pastes containing newlines (could run commands)
+clipboard-paste-protection = true
+clipboard-paste-bracketed-safe = true
+selection-clear-on-typing = true
+right-click-action = context-menu
+
+# --- Notifications --------------------------------------------------------------------
+# Desktop notification when a command that ran 10s+ finishes in a tab you're not looking at.
+notify-on-command-finish = unfocused
+notify-on-command-finish-after = 10s
+app-notifications = no-clipboard-copy
+bell-features = system,attention,title
+desktop-notifications = true
+
+# --- Quick terminal -------------------------------------------------------------------
+# A drop-down terminal. On Linux it needs a Wayland compositor with layer-shell
+# (Cinnamon on X11 can't show it), so the keybind below is a no-op there.
+quick-terminal-position = top
+quick-terminal-screen = mouse
+quick-terminal-animation-duration = 0.15
+quick-terminal-autohide = true
+keybind = global:ctrl+grave_accent=toggle_quick_terminal
+
+# --- Keys (defaults: ghostty +list-keybinds --default) --------------------------------
+keybind = ctrl+shift+p=toggle_command_palette
+keybind = ctrl+shift+enter=toggle_split_zoom
+keybind = ctrl+shift+equal=equalize_splits
+keybind = ctrl+shift+backslash=new_split:auto
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:down
+keybind = ctrl+shift+k=goto_split:up
+keybind = ctrl+shift+l=goto_split:right
+keybind = ctrl+shift+f=start_search
+# Scrollback to a file, opened in $EDITOR
+keybind = ctrl+shift+s=write_screen_file:open
+keybind = ctrl+shift+r=prompt_surface_title
+keybind = ctrl+shift+u=scroll_to_selection
+# Newline without submitting (Claude Code, other TUIs)
+keybind = shift+enter=text:\x1b\r
+
+config-file = ?config.local.ghostty

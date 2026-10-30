@@ -48,7 +48,8 @@ class Harden(Task):
         shown = "; ".join(changes[:4]) + (f"; +{len(changes) - 4} more" if len(changes) > 4 else "")
         summary = f"debloat and harden ({len(changes)} changes: {shown})"
         ctx.note("Every hardening change: scripts/mint/harden.sh --help. Reboot to load them all.")
-        return [Change(summary, partial(run, [*_argv(ctx), "--apply", "--yes"]))]
+        # harden.sh runs sudo itself: get the password now, before the status line starts.
+        return [Change(summary, partial(run, [*_argv(ctx), "--apply", "--yes"], calls_sudo=True))]
 
 
 def _script(ctx: Context) -> Path:

@@ -50,6 +50,7 @@ def run(
     input: str | None = None,
     cwd: Path | None = None,
     progress: Parser | None = None,
+    calls_sudo: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``argv`` and return the result with stdout/stderr captured as text.
 
@@ -57,12 +58,18 @@ def run(
     variables in a way that survives sudo's environment reset. Output is streamed
     instead of captured when ``verbose`` is set; otherwise a live status line shows
     the latest output, with a bar when ``progress`` can tell how far along it is.
+
+    ``calls_sudo`` is for commands that run sudo themselves (install scripts,
+    harden.sh): the password is asked here, before the status line starts, because a
+    prompt from inside the command would be drawn over by it. The child then reuses
+    this run's sudo ticket, which is kept fresh in the background.
     """
     cmd = list(argv)
     if env:
         cmd = ["env", *(f"{k}={v}" for k, v in env.items()), *cmd]
-    if root and os.geteuid() != 0:
+    if (root or calls_sudo) and os.geteuid() != 0:
         sudo.ensure()
+    if root and os.geteuid() != 0:
         cmd = ["sudo", *cmd]
     if verbose:
         print(f"      $ {shlex.join(cmd)}", flush=True)

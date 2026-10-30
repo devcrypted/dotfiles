@@ -6,7 +6,6 @@ Their `apt`, `apt_repo` and `mise` sources were already folded into `packages`,
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -14,7 +13,7 @@ from functools import partial
 from pathlib import Path
 
 from ..config import Deb, Script
-from ..system import CommandError, fetch, output, run, sudo
+from ..system import CommandError, fetch, output, run
 from .base import Change, Context, Task
 
 FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo"
@@ -88,6 +87,4 @@ def _install_deb(ctx: Context, deb: Deb, url: str) -> None:
 
 
 def _run_script(script: Script) -> None:
-    if os.geteuid() != 0:
-        sudo.ensure()  # scripts call sudo themselves; share this run's ticket
-    run(["bash", "-s"], input=fetch(script.url).decode())
+    run(["bash", "-s"], input=fetch(script.url).decode(), calls_sudo=True)

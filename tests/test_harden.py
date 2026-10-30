@@ -49,7 +49,7 @@ def test_plan_is_the_scripts_preview(ctx, monkeypatch):
     calls = []
     monkeypatch.setattr(harden, "output", lambda argv, any_exit: calls.append(argv) or PREVIEW)
     applied = []
-    monkeypatch.setattr(harden, "run", lambda argv: applied.append(argv))
+    monkeypatch.setattr(harden, "run", lambda argv, **kw: applied.append((argv, kw)))
     [change] = HardenTask().plan(ctx)
     assert change.summary == (
         "debloat and harden (2 changes: purge hexchat thunderbird; "
@@ -58,7 +58,10 @@ def test_plan_is_the_scripts_preview(ctx, monkeypatch):
     script = str(ctx.repo / "scripts/mint/harden.sh")
     assert calls == [[script, "--aggressive", "--skip", "firewall"]]
     change.apply()
-    assert applied == [[script, "--aggressive", "--skip", "firewall", "--apply", "--yes"]]
+    # calls_sudo: the password is asked before the status line can draw over the prompt.
+    assert applied == [
+        ([script, "--aggressive", "--skip", "firewall", "--apply", "--yes"], {"calls_sudo": True})
+    ]
 
 
 def test_nothing_listed_means_nothing_to_do(ctx, monkeypatch):

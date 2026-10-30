@@ -54,3 +54,19 @@ def test_sizes_read_naturally():
         "5.0 MB",
         "3.0 GB",
     ]
+
+
+def test_sudo_password_is_asked_before_the_status_line_starts(monkeypatch):
+    events = []
+    monkeypatch.setattr(system.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(system.sudo, "ensure", lambda: events.append("ask password"))
+    monkeypatch.setattr(
+        system,
+        "_run_with_progress",
+        lambda cmd, *a: events.append(("start", cmd)) or system.subprocess.CompletedProcess(cmd, 0, ""),
+    )
+    system.run(["./harden.sh", "--apply"], calls_sudo=True)
+    assert events == ["ask password", ("start", ["./harden.sh", "--apply"])]  # runs as the user, not via sudo
+    events.clear()
+    system.run(["true"])
+    assert events == [("start", ["true"])]  # nothing needing root: never asks

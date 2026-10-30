@@ -158,7 +158,14 @@ if ((APPLY)); then
     read -rp "Changes will be made. Took a Timeshift snapshot? Continue? [y/N] " answer
     [[ "$answer" == [yY]* ]] || exit 1
   fi
-  sudo -v
+  if [[ -t 1 ]]; then
+    sudo -v
+  elif ! sudo -n -v 2>/dev/null; then
+    # Output is piped (./install.sh shows a status line), so a password prompt here
+    # would be hidden. The caller must get the sudo ticket first.
+    echo "error: sudo needs a password; run 'sudo -v' first or run this in a terminal" >&2
+    exit 1
+  fi
 fi
 
 # --- Sections -------------------------------------------------------------------------

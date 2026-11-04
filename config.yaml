@@ -105,6 +105,7 @@ apps:
       url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh
   bitwarden: {when: [desktop], flatpak: com.bitwarden.desktop}
   whatsie: {when: [desktop], flatpak: com.ktechpit.whatsie} # WhatsApp client
+  todoist: {when: [desktop], flatpak: com.todoist.Todoist} # Todoist task manager
   podman-desktop:
     when: [desktop, heavy]
     apt: [podman]

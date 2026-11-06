@@ -30,7 +30,7 @@ def test_full_example_parses(tmp_path):
     cfg = _load(
         tmp_path,
         Path("config.yaml").read_text(),
-        modules=["git", "nvim", "tmux", "starship", "kind", "ghostty"],
+        modules=["git", "nvim", "tmux", "starship", "kind", "ghostty", "atuin", "herdr", "lazygit"],
     )
     assert cfg.shells.default == "fish"
     assert all(isinstance(v, str) for v in cfg.tools.values())

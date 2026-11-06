@@ -10,6 +10,8 @@ if [ -n "${ZSH_VERSION:-}" ]; then _sh=zsh; else _sh=bash; fi
 command -v mise >/dev/null 2>&1 && eval "$(mise activate "$_sh")"
 command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init "$_sh")"
 command -v fzf >/dev/null 2>&1 && eval "$(fzf "--$_sh" 2>/dev/null)"
+# After fzf so atuin owns Ctrl+R; Up/Down keep the prefix search from the init files.
+command -v atuin >/dev/null 2>&1 && eval "$(atuin init "$_sh" --disable-up-arrow)"
 # Prompt: Starship if installed, unless `prompt: builtin` in config.yaml. Otherwise
 # bash/zsh init files set up a built-in prompt.
 if [ "${DOTFILES_PROMPT:-starship}" = starship ] && command -v starship >/dev/null 2>&1; then

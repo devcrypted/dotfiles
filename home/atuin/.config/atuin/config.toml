@@ -1,0 +1,9 @@
+# atuin: searchable shell history (Ctrl+R). Keys: docs.atuin.sh/configuration/config
+auto_sync = false # local only; `atuin register` + true to sync across machines
+update_check = false # mise upgrades it
+search_mode = "fuzzy"
+filter_mode = "global"
+style = "compact"
+inline_height = 20
+enter_accept = false # Enter puts the command on the prompt to edit
+secrets_filter = true # skip commands containing AWS keys, tokens, etc.

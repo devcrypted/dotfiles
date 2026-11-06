@@ -4,6 +4,8 @@ set -g fish_greeting
 
 command -q zoxide; and zoxide init fish | source
 command -q fzf; and fzf --fish 2>/dev/null | source
+# After fzf so atuin owns Ctrl+R; Up/Down keep the prefix search.
+command -q atuin; and atuin init fish --disable-up-arrow | source
 # Starship replaces the built-in functions/fish_prompt.fish unless `prompt: builtin`.
 if test "$DOTFILES_PROMPT" != builtin; and command -q starship
     starship init fish | source

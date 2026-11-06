@@ -62,7 +62,8 @@ All three shells are set up the same way, with no framework:
   `fd`/`bat` mapped to Debian's `fdfind`/`batcat`, and human-readable `df`/`du`/`free`.
 - **Functions:** `mkcd DIR`, `up [N]`, `mask CMD…`, and `extract FILE…` for any
   common archive format.
-- **Navigation and history:** zoxide (`z`), fzf (Ctrl+R, Ctrl+T, Alt+C), typing a directory
+- **Navigation and history:** zoxide (`z`), fzf (Ctrl+T, Alt+C), atuin (Ctrl+R, searchable
+  history; Up/Down stay prefix search), typing a directory
   name to cd into it, Up/Down searching history by what you've typed, a large shared
   history, and Ctrl+Backspace to delete a word.
 - **zsh extras:** autosuggestions, syntax highlighting, case-insensitive menu completion.

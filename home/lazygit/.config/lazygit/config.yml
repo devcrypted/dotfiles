@@ -1,0 +1,10 @@
+# lazygit: keys at github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+gui:
+  nerdFontsVersion: "3" # JetBrainsMono Nerd Font is installed (fonts:)
+  showRandomTip: false
+  border: rounded
+git:
+  pagers:
+    - pager: delta --dark --paging=never
+os:
+  editPreset: nvim

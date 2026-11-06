@@ -17,7 +17,7 @@ shells:
 prompt: starship # starship | builtin (no dependencies; shows path, git branch, exit status)
 
 # Dotfile modules to link from home/<module>/ (shell modules follow shells.install).
-modules: [git, nvim, tmux, starship, kind, ghostty]
+modules: [git, nvim, tmux, starship, kind, ghostty, atuin, herdr, lazygit]
 
 # apt packages from the distro archive, on every machine (desktop apps go in `apps`).
 # Removing one here does not uninstall it.
@@ -67,6 +67,14 @@ tools:
   # AI coding assistants. Not self-updating: `mise upgrade` refreshes them.
   claude: latest # Claude Code
   opencode: latest
+  herdr: latest # tmux-like multiplexer that shows which AI agents are blocked/working/idle
+  # Terminal helpers
+  lazygit: latest # git TUI
+  lazydocker: latest # Docker TUI
+  yq: latest # YAML/JSON/TOML processor (jq is in packages)
+  atuin: latest # searchable shell history
+  btop: latest # system monitor
+  delta: latest # readable git diffs
   "npm:cline": latest # Cline CLI (the VS Code extension is separate)
 
 # Applications that only some machines get. `when` lists profile answers that must all
@@ -106,6 +114,8 @@ apps:
   bitwarden: {when: [desktop], flatpak: com.bitwarden.desktop}
   whatsie: {when: [desktop], flatpak: com.ktechpit.whatsie} # WhatsApp client
   todoist: {when: [desktop], flatpak: com.todoist.Todoist} # Todoist task manager
+  zed: {when: [desktop], flatpak: dev.zed.Zed} # fast editor with built-in AI
+  jan: {when: [desktop, heavy], flatpak: ai.jan.Jan} # offline local-LLM chat app
   podman-desktop:
     when: [desktop, heavy]
     apt: [podman]

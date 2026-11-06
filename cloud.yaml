@@ -17,6 +17,13 @@ tools: # python, uv are preinstalled (node is too, but older than LTS); the rest
   zoxide: null
   eza: null
   bat: null
+  herdr: null
+  lazygit: null
+  lazydocker: null
+  yq: null
+  atuin: null
+  btop: null
+  delta: null
   claude: null
   opencode: null
   "npm:cline": null

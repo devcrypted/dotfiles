@@ -10,6 +10,13 @@
 	conflictStyle = zdiff3
 [diff]
 	colorMoved = default
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	line-numbers = true
 [rerere]
 	enabled = true
 [credential "https://github.com"]

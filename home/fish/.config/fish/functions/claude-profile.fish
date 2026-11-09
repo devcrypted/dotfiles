@@ -68,6 +68,55 @@ function _cprof_use
     echo $n >$CLAUDE_PROFILES_HOME/current
     set -gx CLAUDE_CONFIG_DIR $dir
     echo "Active Claude profile: $n ($dir)"
+    set -l info (_cprof_info $dir)
+    test -n "$info"; and echo "  $info"
+end
+
+# Email plus the 5-hour and weekly usage Claude Code last cached for this profile.
+# The numbers only refresh while that profile is in use, so the age is shown and
+# a window whose reset time has passed counts as 0%.
+function _cprof_info
+    # fish has no heredocs and this is single-quoted: no ' or backslash inside.
+    python3 -I -c '
+import json, sys, time
+from datetime import datetime
+
+try:
+    d = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit()
+email = (d.get("oauthAccount") or {}).get("emailAddress") or "?"
+cache = d.get("cachedUsageUtilization") or {}
+u = cache.get("utilization") or {}
+now = time.time()
+
+def window(name, key):
+    w = u.get(key)
+    if not w:
+        return name + " ?"
+    reset = datetime.fromisoformat(w["resets_at"]).timestamp()
+    if reset <= now:
+        return name + " 0%"
+    left = int((reset - now) // 60)
+    if left >= 1440:
+        when = "%dd%dh" % (left // 1440, left % 1440 // 60)
+    else:
+        when = "%dh%02dm" % (left // 60, left % 60)
+    return "%s %.0f%% (resets in %s)" % (name, w["utilization"], when)
+
+line = email
+if u:
+    age = int((now - cache["fetchedAtMs"] / 1000) // 60)
+    if age >= 1440:
+        ago = "%dd" % (age // 1440)
+    elif age >= 60:
+        ago = "%dh" % (age // 60)
+    else:
+        ago = "%dm" % age
+    line += "  " + window("5h", "five_hour") + "  " + window("7d", "seven_day")
+    line += "  [as of " + ago + " ago]"
+print(line)
+' $argv[1]/.claude.json 2>/dev/null
 end
 
 function _cprof_status
@@ -79,6 +128,7 @@ function _cprof_status
         set -l mark " "
         test "$i" = "$cur"; and set mark "*"
         printf '%s %s  %-14s %s\n' $mark $i $state $dir
+        _cprof_logged_in $dir; and set -l info (_cprof_info $dir); and test -n "$info"; and echo "      $info"
     end
     if set -q CLAUDE_CONFIG_DIR
         echo "(* = active in new shells; this shell uses: $CLAUDE_CONFIG_DIR)"

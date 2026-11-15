@@ -1,0 +1,189 @@
+{
+  "linux": {
+    "harden": [
+      "none",
+      "standard",
+      "aggressive"
+    ],
+    "personas": {
+      "node": {
+        "about": "Node.js web development (pnpm, Wrangler, Supabase, Doppler, Claude Code, Docker)",
+        "docker": true,
+        "apps": [
+          "doppler",
+          "claude-code"
+        ]
+      },
+      "python": {
+        "about": "Python development (latest Python, uv)",
+        "docker": false,
+        "apps": []
+      },
+      "k8s": {
+        "about": "Kubernetes and infrastructure (kubectl, kind, Helm, Terraform, Docker)",
+        "docker": true,
+        "apps": []
+      },
+      "ai": {
+        "about": "AI coding agents (Claude Code, opencode, Cline, herdr, rtk)",
+        "docker": false,
+        "apps": [
+          "claude-code"
+        ]
+      },
+      "azure": {
+        "about": "Azure administration (Azure CLI, PowerShell)",
+        "docker": false,
+        "apps": []
+      }
+    },
+    "apps": {
+      "timeshift": {
+        "about": "System snapshots you can roll back to",
+        "when": []
+      },
+      "lazydocker": {
+        "about": "Terminal UI for Docker",
+        "when": [
+          "docker"
+        ]
+      },
+      "doppler": {
+        "about": "Secrets manager CLI",
+        "when": [
+          "persona"
+        ]
+      },
+      "claude-code": {
+        "about": "Anthropic's coding agent for the terminal",
+        "when": [
+          "persona"
+        ]
+      },
+      "clipboard": {
+        "about": "Copy and paste from the terminal (xclip, wl-clipboard)",
+        "when": [
+          "desktop"
+        ]
+      },
+      "nvtop": {
+        "about": "GPU monitor",
+        "when": [
+          "gpu"
+        ]
+      },
+      "brave": {
+        "about": "Privacy-minded Chromium browser",
+        "when": [
+          "desktop"
+        ]
+      },
+      "vscode": {
+        "about": "Visual Studio Code editor",
+        "when": [
+          "desktop"
+        ]
+      },
+      "ghostty": {
+        "about": "Fast GPU-accelerated terminal",
+        "when": [
+          "desktop"
+        ]
+      },
+      "bitwarden": {
+        "about": "Password manager",
+        "when": [
+          "desktop"
+        ]
+      },
+      "zed": {
+        "about": "Fast editor with built-in AI",
+        "when": [
+          "desktop"
+        ]
+      },
+      "whatsie": {
+        "about": "WhatsApp client",
+        "when": [
+          "desktop"
+        ]
+      },
+      "todoist": {
+        "about": "Todoist task manager",
+        "when": [
+          "desktop"
+        ]
+      },
+      "jan": {
+        "about": "Offline local-LLM chat app",
+        "when": [
+          "desktop",
+          "heavy"
+        ]
+      },
+      "podman-desktop": {
+        "about": "Containers GUI (Podman)",
+        "when": [
+          "desktop",
+          "heavy"
+        ]
+      }
+    },
+    "base": {
+      "packages": [
+        "build-essential",
+        "ca-certificates",
+        "curl",
+        "wget",
+        "unzip",
+        "git",
+        "gh",
+        "htop",
+        "btop",
+        "jq",
+        "ripgrep",
+        "fd-find",
+        "tmux",
+        "neovim",
+        "python3",
+        "python3-pip",
+        "python3-venv",
+        "libssl-dev",
+        "libffi-dev"
+      ],
+      "tools": [
+        "fzf",
+        "zoxide",
+        "eza",
+        "bat",
+        "starship",
+        "lazygit",
+        "yq",
+        "atuin",
+        "delta"
+      ]
+    }
+  },
+  "windows": {
+    "personas": {
+      "node": {
+        "about": "Node.js web development (Node LTS, pnpm, Claude Code, Docker Desktop)"
+      },
+      "python": {
+        "about": "Python development (Python 3.13, uv)"
+      },
+      "k8s": {
+        "about": "Kubernetes and infrastructure (kubectl, kind, Helm, Terraform, Docker Desktop)"
+      },
+      "ai": {
+        "about": "AI coding agents (Claude Code, opencode)"
+      },
+      "azure": {
+        "about": "Azure administration (Azure CLI)"
+      },
+      "devops": {
+        "about": "Windows-only extras (Go, Ruby, Vagrant, Pulumi, Podman, Podman Desktop)"
+      }
+    }
+  }
+}

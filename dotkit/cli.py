@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from . import onboard, reinstall, system
+from . import catalog, onboard, reinstall, system
 from .adopt import AdoptError, adopt
 from .apt import Apt
 from .config import Config, ConfigError, Profile, load, resolve
@@ -33,6 +33,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "adopt":
         return _adopt(args)
+    if args.command == "catalog":
+        try:
+            print(catalog.dump(REPO), end="")
+        except ConfigError as exc:
+            _error(str(exc))
+            return 2
+        return 0
     if args.names and args.command != "reinstall":
         _error(f"unexpected arguments: {' '.join(args.names)} (only `adopt` and `reinstall` take any)")
         return 2
@@ -77,12 +84,13 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         "command",
         nargs="?",
         default="apply",
-        choices=("apply", "plan", "status", "upgrade", "reinstall", "setup", "cloud", "adopt"),
+        choices=("apply", "plan", "status", "upgrade", "reinstall", "setup", "cloud", "adopt", "catalog"),
         help="apply changes (default), show planned changes, summarise each task, "
         "apply and also upgrade everything installed (apt, mise tools, flatpaks, .debs), "
         "reinstall the named apps, tools or packages, "
         "answer the machine profile questions again, set up a Claude Code cloud environment "
-        "(applies cloud.yaml), or adopt existing config files into the repo",
+        "(applies cloud.yaml), adopt existing config files into the repo, "
+        "or print the web configurator's choices as JSON",
     )
     p.add_argument(
         "names",
@@ -110,6 +118,13 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     )
     for name, what in (("gpu", "NVIDIA driver + CUDA"), ("docker", "Docker Engine"), ("heavy", "heavy apps")):
         prof.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, help=what)
+    prof.add_argument(
+        "--skip-apps",
+        dest="skip_apps",
+        type=_personas,
+        metavar="NAME,..",
+        help="apps from `apps` in config.yaml to leave out of this machine (`none` to skip nothing)",
+    )
     prof.add_argument(
         "--harden",
         choices=("none", "standard", "aggressive"),
@@ -206,8 +221,8 @@ def _context(args: argparse.Namespace) -> Context:
 
 def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path) -> Config:
     """Make sure the config has a machine profile, asking for one on the first run."""
-    keys = [f.name for f in fields(Profile)]
-    given = {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
+    keys = _profile_keys()
+    given = {k: getattr(args, k) for k in (*keys, "skip_apps") if getattr(args, k) is not None}
     fresh = config.profile is None
     missing = frozenset() if fresh else _unanswered(path, keys)
     if missing and args.command in _ONBOARDING and not given:
@@ -236,6 +251,11 @@ def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path)
     if tty is None and fresh:
         print(f"note: wrote {path.name} from detected defaults; edit it or run ./install.sh setup")
     return replace(config, profile=profile, user=user)
+
+
+def _profile_keys() -> list[str]:
+    """The profile answers that are questions (skip_apps is only ever set by a flag)."""
+    return [f.name for f in fields(Profile) if f.name != "skip_apps"]
 
 
 def _unanswered(path: Path, keys: list[str]) -> frozenset[str]:

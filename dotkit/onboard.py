@@ -32,6 +32,7 @@ COMMENTS = {
     "harden": "none | standard | aggressive: scripts/mint/harden.sh (Linux Mint only)",
     "cinnamon": "apply the saved Cinnamon desktop look in desktop/cinnamon/",
     "personas": "toolsets from `personas` in config.yaml",
+    "skip_apps": "apps from config.yaml this machine doesn't want",
 }
 MINT = "linuxmint"
 
@@ -212,6 +213,13 @@ def onboard(
     if asker:
         print()
 
+    # Never asked: set with --skip-apps, otherwise whatever this machine already has.
+    skip_apps = tuple(given.get("skip_apps", saved.skip_apps if saved else ()))  # type: ignore[call-overload]
+    for name in skip_apps:
+        if name not in config.apps:
+            available = ", ".join(config.apps) or "none defined"
+            raise ConfigError(f"no such app {name!r} (available: {available})")
+
     return Profile(
         role=role,  # type: ignore[arg-type]
         gpu=bool(gpu),
@@ -220,6 +228,7 @@ def onboard(
         harden=harden,  # type: ignore[arg-type]
         cinnamon=bool(cinnamon),
         personas=tuple(personas),
+        skip_apps=skip_apps,
     )
 
 

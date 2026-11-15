@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>dot.kamal.sh · dotfiles configurator</title>
+  <meta name="description" content="Pick your tools, get one install command for Linux, WSL or Windows.">
+  <meta name="theme-color" content="#0b0d10">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d10'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23f2b45a'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="top">
+    <a class="mark" href="/" aria-label="dot.kamal.sh"><span class="dot"></span>dot.kamal.sh</a>
+    <a class="gh" href="https://github.com/devcrypted/dotfiles" rel="noopener">source ↗</a>
+  </header>
+
+  <main class="layout">
+    <section class="build" aria-labelledby="h">
+      <h1 id="h">Your machine,<br><em>set up your way.</em></h1>
+      <p class="lede">Choose what goes on it. You get one command that does exactly that, safe to run again any time. Nothing is sent anywhere from this page.</p>
+
+      <div class="tabs" role="tablist" aria-label="Operating system">
+        <button role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="true">Linux · WSL</button>
+        <button role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="false" tabindex="-1">Windows</button>
+      </div>
+
+      <div id="panel-linux" role="tabpanel" aria-labelledby="tab-linux">
+        <fieldset class="card">
+          <legend><span class="n">01</span> Machine</legend>
+          <div class="seg" role="radiogroup" aria-label="Role" id="role"></div>
+          <div class="switches" id="switches"></div>
+          <div class="field">
+            <span class="label">Hardening <small>Linux Mint only</small></span>
+            <div class="seg" role="radiogroup" aria-label="Hardening" id="harden"></div>
+          </div>
+        </fieldset>
+        <fieldset class="card">
+          <legend><span class="n">02</span> What do you build?</legend>
+          <div class="chips" id="personas-linux"></div>
+        </fieldset>
+        <fieldset class="card">
+          <legend><span class="n">03</span> Apps <small id="app-count"></small></legend>
+          <p class="hint">Everything that fits your choices is on. Untick what you don't want.</p>
+          <ul class="apps" id="apps"></ul>
+        </fieldset>
+      </div>
+
+      <div id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" hidden>
+        <fieldset class="card">
+          <legend><span class="n">01</span> What do you build?</legend>
+          <div class="chips" id="personas-windows"></div>
+          <p class="hint">Installs a base set of apps with winget, plus each toolset you pick. Your answers on the machine itself (hardening, WSL) are asked when it runs.</p>
+        </fieldset>
+      </div>
+    </section>
+
+    <aside class="out" aria-label="Your command">
+      <div class="term">
+        <div class="term-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span id="shell-name">bash</span>
+        </div>
+        <pre class="cmd" id="cmd" tabindex="0"></pre>
+        <div class="term-foot">
+          <label class="toggle"><input type="checkbox" id="plan"><span>Preview only<span class="wide">, change nothing</span></span></label>
+          <button class="copy" id="copy" type="button">Copy command</button>
+        </div>
+      </div>
+      <p class="summary" id="summary" aria-live="polite"></p>
+      <p class="fine">Run it as your normal user, not with sudo. Git name and email are asked on the machine and kept only there.</p>
+    </aside>
+  </main>
+</body>
+</html>

@@ -92,6 +92,7 @@ class Profile:
     harden: HardenLevel = "none"  # scripts/mint/harden.sh; only asked on Linux Mint
     cinnamon: bool = False  # apply desktop/cinnamon/; only asked on a Mint Cinnamon desktop
     personas: tuple[str, ...] = ()  # names from `personas`: what this machine is used for
+    skip_apps: tuple[str, ...] = ()  # names from `apps` this machine doesn't want (not asked)
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,7 @@ class App:
     """One installable application. Every source given is used, so an app can pair
     an apt package with a flatpak (e.g. podman + Podman Desktop)."""
 
+    about: str = ""  # one line, shown by the web configurator
     when: tuple[Condition, ...] = ()
     apt: tuple[str, ...] = ()
     apt_repo: AptRepo | None = None
@@ -249,7 +251,8 @@ def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
     apps = {
         name: app
         for name, app in config.apps.items()
-        if all(name in listed if c == "persona" else holds[c] for c in app.when)
+        if name not in profile.skip_apps
+        and all(name in listed if c == "persona" else holds[c] for c in app.when)
     }
     packages = list(config.packages)
     repos, tools = dict(config.apt_repos), dict(config.tools)
@@ -472,6 +475,10 @@ def _check_personas(config: Config, home_dir: Path | None) -> None:
             if name not in config.personas:
                 available = ", ".join(config.personas) or "none defined"
                 raise ConfigError(f"profile.personas: no such persona {name!r} (available: {available})")
+        for name in config.profile.skip_apps:
+            if name not in config.apps:
+                available = ", ".join(config.apps) or "none defined"
+                raise ConfigError(f"profile.skip_apps: no such app {name!r} (available: {available})")
 
 
 def _join(where: str, key: str) -> str:

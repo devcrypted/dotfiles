@@ -50,7 +50,7 @@ Ubuntu and run the Linux steps above. To skip the questions, download the script
 | [FEATURES.md](FEATURES.md) | What each task does, the machine profile questions, commit checks |
 | [MANAGING.md](MANAGING.md) | Where each kind of change goes, adding apps and tasks, development |
 | [CLOUD.md](CLOUD.md) | Claude Code cloud environments |
-| [web/README.md](web/README.md) | How `dot.kamal.sh` serves the installers |
+| [web/README.md](web/README.md) | How `dot.kamal.sh` serves the installers and the configurator page |
 
 ## Supported systems
 

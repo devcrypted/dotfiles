@@ -241,3 +241,41 @@ def test_cinnamon_look_is_asked_only_on_a_mint_cinnamon_desktop(capsys):
     profile = onboard.onboard(BASE, MINT, given={}, tty=io.StringIO("d\ny\ny\ns\nn\n"), hw=MINT_CINNAMON)
     assert not profile.cinnamon
     assert "Apply the saved Cinnamon desktop" in capsys.readouterr().out
+
+
+# --- skip_apps (spec 0004) ---------------------------------------------------------
+
+
+def test_skip_apps_drops_the_app_and_what_it_brings():
+    full = _resolve(Profile(role="desktop", personas=()))
+    skipped = _resolve(Profile(role="desktop", personas=(), skip_apps=("browser", "cloud")))
+    assert "browser" in full.apps and "browser" not in skipped.apps
+    assert "brave-browser" not in skipped.packages and "everywhere" in skipped.apps
+    assert "azure" in full.tools and "azure" not in skipped.tools
+    assert "browser" not in skipped.apt_repos
+
+
+def test_unknown_skip_app_is_a_config_error(tmp_path):
+    (tmp_path / "config.yaml").write_text("apps: {tree: {apt: [tree]}}\nprofile: {skip_apps: [nope]}")
+    with pytest.raises(ConfigError, match=r"profile.skip_apps: no such app 'nope' \(available: tree\)"):
+        load(tmp_path / "config.yaml")
+
+
+def test_skip_apps_round_trips_and_is_kept_by_a_flags_only_change(tmp_path):
+    path = tmp_path / "profile.yaml"
+    profile = Profile(role="server", gpu=False, docker=False, heavy=False, skip_apps=("jan", "zed"))
+    onboard.save(path, profile)
+    (tmp_path / "config.yaml").write_text("apps: {jan: {apt: [a]}, zed: {apt: [b]}}")
+    loaded = load(tmp_path / "config.yaml", profile=path)
+    assert loaded.profile == profile
+    kept = onboard.onboard(loaded, FACTS, given={"heavy": True}, tty=None, hw=SERVER)
+    assert kept.skip_apps == ("jan", "zed")
+    assert onboard.onboard(loaded, FACTS, given={"skip_apps": []}, tty=None, hw=SERVER).skip_apps == ()
+
+
+def test_skip_apps_is_not_a_missing_answer_for_an_old_profile(tmp_path):
+    from dotkit.cli import _profile_keys, _unanswered
+
+    path = tmp_path / "profile.yaml"
+    path.write_text("profile:\n  role: server\n")
+    assert "skip_apps" not in _unanswered(path, _profile_keys())

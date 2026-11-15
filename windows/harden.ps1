@@ -36,6 +36,11 @@
     .\windows\harden.ps1 -Only privacy,start,taskbar
     .\windows\harden.ps1 -Restore C:\ProgramData\dotfiles\harden-undo-20261030-101500.json
 #>
+# PSScriptAnalyzer: deliberate style in this script (see .pre-commit-config.yaml).
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', '', Justification = 'C, Set-Reg and Remove-Appx are this script''s own terse helpers')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'The Keep* and TaskbarLeft switches are read inside the section functions')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = '-DryRun is the preview mechanism, not -WhatIf')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Justification = 'Section functions are named after their section: apps, updates')]
 [CmdletBinding()]
 param(
     [switch]$DryRun,

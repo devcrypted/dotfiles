@@ -8,8 +8,13 @@
     keep Xbox? taskbar on the left?) and saves the answers to
     %ProgramData%\dotfiles\profile.json, so later runs don't ask. -Setup asks again.
 
+    Personas are named toolsets (windows\personas.json: node, python, k8s, ai, azure,
+    devops). packages.json is installed everywhere; each selected persona adds its
+    packages. The selection is asked once and saved with the other answers; -Persona
+    sets it without asking. -ListPackages prints what a machine would get and exits.
+
     Per-machine overrides (optional) go in %ProgramData%\dotfiles\config.json:
-      { "skipApps":   ["Docker.DockerDesktop"],      winget IDs from packages.json to leave out
+      { "skipApps":   ["Docker.DockerDesktop"],      winget IDs (base or persona) to leave out
         "extraApps":  ["Spotify.Spotify"],           more winget IDs for this machine
         "hardenSkip": ["security", "edge"] }         harden.ps1 sections to leave alone
 
@@ -22,11 +27,13 @@
     .\windows\install.ps1 -Setup               # answer the questions again
     .\windows\install.ps1 -SkipWsl -SkipHarden
     .\windows\install.ps1 -Yes                 # don't ask: harden with the defaults
+    .\windows\install.ps1 -Persona node,k8s    # a Node.js and Kubernetes dev machine
+    .\windows\install.ps1 -ListPackages        # preview the apps; changes nothing
     irm https://dot.kamal.sh | iex             # short URL (web/worker.js)
 #>
 [CmdletBinding()]
 param(
-    # winget export/import format; edit it to change the app list.
+    # winget export/import format; edit it to change the base app list.
     [string]$PackagesFile = $(if ($PSScriptRoot) { Join-Path $PSScriptRoot 'packages.json' } else { '' }),
     [string]$Distro = 'Ubuntu-24.04',
     [switch]$SkipApps,
@@ -36,7 +43,11 @@ param(
     # Ask the machine questions again.
     [switch]$Setup,
     # Don't ask: use saved answers, or the defaults on a first run.
-    [switch]$Yes
+    [switch]$Yes,
+    # Toolsets from personas.json to install on top of the base list; "none" for the base only.
+    [string[]]$Persona,
+    # Print the winget IDs this machine would get, then exit. Changes nothing, needs no admin.
+    [switch]$ListPackages
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,9 +57,11 @@ $ProfileFile = Join-Path $StateDir 'profile.json'
 $ConfigFile = Join-Path $StateDir 'config.json'
 $StateFile = Join-Path $StateDir 'state.json'
 
-$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Run this script from an elevated (Administrator) PowerShell.'
+if (-not $ListPackages) {
+    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'Run this script from an elevated (Administrator) PowerShell.'
+    }
 }
 
 # Use the file next to this script, or download it when piped through `iex`.
@@ -64,10 +77,55 @@ function Read-Json([string]$Path) {
     return $null
 }
 
+# The base list plus the selected personas' packages, minus skipApps, plus extraApps.
+function Resolve-PackageList($List, [string[]]$Selected, $KnownPersonas, [string[]]$Skip, [string[]]$Extra) {
+    $winget = $List.Sources | Where-Object { $_.SourceDetails.Name -eq 'winget' } | Select-Object -First 1
+    $add = {
+        param($Id)
+        if (@($winget.Packages.PackageIdentifier) -notcontains $Id) {
+            $winget.Packages += [pscustomobject]@{ PackageIdentifier = $Id }
+        }
+    }
+    foreach ($name in $Selected) {
+        foreach ($id in $KnownPersonas.$name.packages) { & $add $id }
+    }
+    foreach ($source in $List.Sources) {
+        $source.Packages = @($source.Packages | Where-Object { $Skip -notcontains $_.PackageIdentifier })
+    }
+    foreach ($id in $Extra) { & $add $id }
+    $List.Sources = @($List.Sources | Where-Object { @($_.Packages).Count })
+    return $List
+}
+
+# A numbered menu: numbers or names, "none" for the base only, Enter keeps the default.
+function Read-PersonaChoice($KnownPersonas, [string[]]$Current) {
+    $names = @($KnownPersonas.PSObject.Properties.Name)
+    Write-Host '  Personas: toolsets for the work this machine does. Pick any number.'
+    for ($i = 0; $i -lt $names.Count; $i++) {
+        Write-Host ('       {0}  {1,-7}  {2}' -f ($i + 1), $names[$i], $KnownPersonas.($names[$i]).about)
+    }
+    $shown = if ($Current) { $Current -join ',' } else { 'none' }
+    while ($true) {
+        $reply = (Read-Host "     Numbers or names (e.g. 1 3), or none [$shown]").Trim().ToLower()
+        if ($reply -eq '') { return $Current }
+        if ($reply -in 'none', '-', '0') { return @() }
+        $picked = @()
+        foreach ($token in ($reply -split '[,\s]+' | Where-Object { $_ })) {
+            if ($token -match '^\d+$' -and [int]$token -ge 1 -and [int]$token -le $names.Count) { $token = $names[[int]$token - 1] }
+            if ($names -notcontains $token) { $picked = $null; break }
+            $picked += $token
+        }
+        if ($null -ne $picked) { return @($picked | Select-Object -Unique) }
+        Write-Host '     Please answer with numbers or names from the list, or none.'
+    }
+}
+
 # --- Per-machine overrides (config.json, optional) ---------------------------------
+# Not named $skipApps/$extraApps: PowerShell variables are case-insensitive, so $skipApps
+# would overwrite the -SkipApps switch.
 $local = Read-Json $ConfigFile
-$skipApps = @($local.skipApps | Where-Object { $_ })
-$extraApps = @($local.extraApps | Where-Object { $_ })
+$skipIds = @($local.skipApps | Where-Object { $_ })
+$extraIds = @($local.extraApps | Where-Object { $_ })
 $hardenSkip = @($local.hardenSkip | Where-Object { $_ })
 if ($local) { Write-Host "Using overrides from $ConfigFile" -ForegroundColor DarkCyan }
 
@@ -81,6 +139,25 @@ foreach ($key in $defaults.Keys) {
 $missing = @($defaults.Keys | Where-Object { -not $saved -or $null -eq $saved.$_ })
 $interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected -and -not $Yes
 
+# Personas. Precedence: -Persona, then the saved answer, then (asked below) nothing. They
+# are kept apart from $answers: hardening's fingerprint must not change with them.
+$knownPersonas = Get-Content -Raw (Get-RepoFile 'personas.json') | ConvertFrom-Json
+$personaNames = @($knownPersonas.PSObject.Properties.Name)
+$personasGiven = $PSBoundParameters.ContainsKey('Persona')
+$personasSaved = $saved -and ($saved.PSObject.Properties.Name -contains 'personas')
+if ($personasGiven) {
+    $personas = @($Persona | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne 'none' })
+} elseif ($personasSaved) {
+    $personas = @($saved.personas | Where-Object { $_ })
+} else {
+    $personas = @()
+}
+$unknown = @($personas | Where-Object { $personaNames -notcontains $_ })
+if ($unknown) {
+    throw "No such persona: $($unknown -join ', ') (available: $($personaNames -join ', '))"
+}
+$personasKnown = $personasGiven -or $personasSaved
+
 function Ask([string]$Question, [bool]$Default) {
     $hint = if ($Default) { '[Y/n]' } else { '[y/N]' }
     while ($true) {
@@ -92,8 +169,12 @@ function Ask([string]$Question, [bool]$Default) {
     }
 }
 
-if ($interactive -and ($Setup -or $missing)) {
+if (-not $ListPackages -and $interactive -and ($Setup -or $missing -or -not $personasKnown)) {
     Write-Host "`nA few questions about this machine (saved to $ProfileFile; Enter keeps the [default]):" -ForegroundColor Cyan
+    if (-not $personasGiven) {
+        $personas = @(Read-PersonaChoice $knownPersonas $personas)
+        $personasKnown = $true
+    }
     $answers.harden = Ask 'Debloat and harden Windows (preinstalled apps, telemetry, ads, Copilot/Recall, Start menu, taskbar, security)?' $answers.harden
     if ($answers.harden) {
         $answers.keepOneDrive = Ask 'Keep OneDrive?' $answers.keepOneDrive
@@ -102,13 +183,23 @@ if ($interactive -and ($Setup -or $missing)) {
     }
     Write-Host ''
 }
-if ($Setup -or $missing) {
+if (-not $ListPackages -and ($Setup -or $missing -or $personasGiven -or ($interactive -and $personasKnown -and -not $personasSaved))) {
     New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
-    $answers | ConvertTo-Json | Set-Content -Encoding UTF8 $ProfileFile
+    # Without a personas answer the file omits it, so a later run with a terminal asks.
+    $toSave = [ordered]@{} + $answers
+    if ($personasKnown) { $toSave.personas = @($personas) }
+    $toSave | ConvertTo-Json | Set-Content -Encoding UTF8 $ProfileFile
     if (-not $interactive) { Write-Host "Saved default answers to $ProfileFile (rerun with -Setup to change them)." -ForegroundColor DarkCyan }
 }
 
 # --- Apps --------------------------------------------------------------------------
+if ($ListPackages) {
+    if (-not $PackagesFile) { $PackagesFile = Get-RepoFile 'packages.json' }
+    $list = Resolve-PackageList -List (Get-Content -Raw $PackagesFile | ConvertFrom-Json) -Selected $personas `
+        -KnownPersonas $knownPersonas -Skip $skipIds -Extra $extraIds
+    $list.Sources.Packages.PackageIdentifier | Select-Object -Unique
+    return
+}
 if (-not $SkipApps -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
     # Fresh VMs and Windows Server images can lack winget; the rest still runs.
     Write-Warning 'winget was not found, so apps are skipped. Install "App Installer" from the Microsoft Store (or update Windows), then run this again.'
@@ -116,19 +207,10 @@ if (-not $SkipApps -and -not (Get-Command winget -ErrorAction SilentlyContinue))
 }
 if (-not $SkipApps) {
     if (-not $PackagesFile) { $PackagesFile = Get-RepoFile 'packages.json' }
-    if ($skipApps -or $extraApps) {
-        # Apply config.json to a copy of the list: drop skipped IDs, add extra ones.
-        $list = Get-Content -Raw $PackagesFile | ConvertFrom-Json
-        foreach ($source in $list.Sources) {
-            $source.Packages = @($source.Packages | Where-Object { $skipApps -notcontains $_.PackageIdentifier })
-        }
-        $winget = $list.Sources | Where-Object { $_.SourceDetails.Name -eq 'winget' } | Select-Object -First 1
-        foreach ($id in $extraApps) {
-            if (@($winget.Packages.PackageIdentifier) -notcontains $id) {
-                $winget.Packages += [pscustomobject]@{ PackageIdentifier = $id }
-            }
-        }
-        $list.Sources = @($list.Sources | Where-Object { @($_.Packages).Count })
+    if ($personas -or $skipIds -or $extraIds) {
+        # Resolve the base list, personas and config.json into a copy for winget.
+        $list = Resolve-PackageList -List (Get-Content -Raw $PackagesFile | ConvertFrom-Json) -Selected $personas `
+            -KnownPersonas $knownPersonas -Skip $skipIds -Extra $extraIds
         $PackagesFile = Join-Path $env:TEMP 'dotfiles-packages.local.json'
         [IO.File]::WriteAllText($PackagesFile, ($list | ConvertTo-Json -Depth 6))  # UTF-8, no BOM
     }

@@ -98,6 +98,33 @@ repos:
         entry: zsh -n
         types: [zsh]
 
+  # --- PowerShell (Windows installer) ---------------------------------------------
+  # Needs pwsh (the `azure` persona or the GitHub runner has it); the modules are
+  # installed on first use.
+  - repo: local
+    hooks:
+      - id: psscriptanalyzer
+        name: PSScriptAnalyzer
+        language: system
+        types: [powershell]
+        pass_filenames: false
+        entry: >-
+          pwsh -NoProfile -Command "
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser };
+          $issues = Invoke-ScriptAnalyzer -Path windows -Recurse -ExcludeRule PSAvoidUsingWriteHost;
+          $issues | Format-Table -AutoSize | Out-String | Write-Host;
+          if ($issues) { exit 1 }"
+      - id: pester
+        name: Pester (Windows package selection)
+        language: system
+        types: [powershell]
+        pass_filenames: false
+        entry: >-
+          pwsh -NoProfile -Command "
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -ge 5.5)) { Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser };
+          $r = Invoke-Pester tests/windows -Output Minimal -PassThru;
+          if ($r.FailedCount) { exit 1 }"
+
   # --- Docs ------------------------------------------------------------------------
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: v0.2.78

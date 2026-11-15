@@ -37,8 +37,10 @@ From an elevated Windows PowerShell:
 irm https://dot.kamal.sh | iex
 ```
 
-It installs the apps, sets up WSL with Ubuntu 24.04, and debloats and hardens Windows
-(asks first). Then open Ubuntu and run the Linux steps above.
+It asks what the machine is for (personas such as `node` or `k8s`), installs the apps,
+sets up WSL with Ubuntu 24.04, and debloats and hardens Windows (asks first). Then open
+Ubuntu and run the Linux steps above. To skip the questions, download the script and run
+`.\install.ps1 -Persona node -Yes` ([USAGE.md](USAGE.md#windows)).
 
 ## More
 

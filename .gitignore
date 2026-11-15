@@ -12,6 +12,8 @@ config.local.ghostty
 *.kdbx
 .netrc
 .claude/settings.local.json
+# Written by Pester's CI mode
+testResults.xml
 __pycache__/
 .pytest_cache/
 .ruff_cache/

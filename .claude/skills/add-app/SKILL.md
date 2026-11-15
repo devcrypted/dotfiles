@@ -40,4 +40,9 @@ ones were ruled out.
 - `python3 -m pytest -q` (tests load the real `config.yaml`), then `./install.sh plan`
   if a machine is available.
 - New persona: also add its row to the table in `USAGE.md#personas`.
+- Windows: a winget ID goes in `windows/packages.json` (every machine) or
+  `windows/personas.json` (one persona), never both. Confirm the ID exists first
+  (`winget search --id <id> --exact` on Windows, or the vendor's install docs); an
+  unconfirmed ID is left out and noted in `USAGE.md`. Preview with
+  `pwsh windows/install.ps1 -ListPackages -Persona <name>`.
 - Not wanted: kitty.

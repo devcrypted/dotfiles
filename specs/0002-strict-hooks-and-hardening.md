@@ -14,7 +14,7 @@ Several defaults were unsafe or unpinned for a repo other people will run.
   flags 1 to 6 (name in a tracked file, passwordless sudo default, unpinned third-party
   installer, CI pinning and permissions, Dependabot, licence).
 - Licence: MIT, held by the GitHub account name, not a personal name.
-- `scripts/general/` and `scripts/azure/` stay until the owner decides where they go.
+- `scripts/general/` and `scripts/azure/` stayed here at this point; spec 0003 removes them.
 
 ## Behaviour
 

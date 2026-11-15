@@ -45,7 +45,7 @@ run changes nothing.
 | `dotkit/tasks/` | One file per task; run order in `tasks/__init__.py`. `plan()` must not change anything. |
 | `home/<module>/` | Config files symlinked into `$HOME`. |
 | `desktop/cinnamon/`, `scripts/mint/` | Mint desktop look and hardening. Never commit location or device IDs from dconf. `harden.sh` preview lines start with `~`; keep that. |
-| `windows/` | `install.ps1` (winget apps from `packages.json`, WSL, `harden.ps1`). |
+| `windows/` | `install.ps1` (winget apps: `packages.json` is the base, `personas.json` the toolsets; WSL; `harden.ps1`). Persona names match `config.yaml`, plus Windows-only `devops` (tests enforce it). |
 | `web/` | Cloudflare Worker for the short install URL. `install.sh` must work piped (`curl \| bash`): everything stays inside `main()`. |
 | `specs/` | One spec per feature (`specs/README.md` has the template). |
 | `.claude/skills/` | `spec` (spec-driven workflow), `add-app` (package source order and checks). |
@@ -71,14 +71,14 @@ goes), `CLOUD.md`.
 ```bash
 python3 -m pytest -q                   # needs pytest + PyYAML
 ruff check . && ruff format --check .
-pre-commit run --all-files             # everything CI runs, incl. secrets/PII scans
+pre-commit run --all-files             # everything CI runs, incl. secrets/PII scans and,
+                                       # with pwsh installed, PSScriptAnalyzer and Pester
 ```
 
 ## Working cheaply
 
 - Search (`rg -n`, a path or glob) before reading; read only the lines needed. Skip
-  `desktop/cinnamon/spices/`, `windows/harden.ps1` and `scripts/general/` unless the
-  task is about them.
+  `desktop/cinnamon/spices/` and `windows/harden.ps1` unless the task is about them.
 - Run one test file while iterating (`python3 -m pytest -q tests/test_x.py`), the full
   suite once at the end. Pipe long output through `tail`.
 - Keep replies short: what changed, what was checked, what's left.

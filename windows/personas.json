@@ -1,0 +1,52 @@
+{
+  "node": {
+    "about": "Node.js web development (Node LTS, pnpm, Claude Code, Docker Desktop)",
+    "packages": [
+      "OpenJS.NodeJS.LTS",
+      "pnpm.pnpm",
+      "Anthropic.ClaudeCode",
+      "Docker.DockerDesktop"
+    ]
+  },
+  "python": {
+    "about": "Python development (Python 3.13, uv)",
+    "packages": [
+      "Python.Python.3.13",
+      "astral-sh.uv"
+    ]
+  },
+  "k8s": {
+    "about": "Kubernetes and infrastructure (kubectl, kind, Helm, Terraform, Docker Desktop)",
+    "packages": [
+      "Kubernetes.kubectl",
+      "Kubernetes.kind",
+      "Helm.Helm",
+      "Hashicorp.Terraform",
+      "Docker.DockerDesktop"
+    ]
+  },
+  "ai": {
+    "about": "AI coding agents (Claude Code, opencode)",
+    "packages": [
+      "Anthropic.ClaudeCode",
+      "SST.opencode"
+    ]
+  },
+  "azure": {
+    "about": "Azure administration (Azure CLI)",
+    "packages": [
+      "Microsoft.AzureCLI"
+    ]
+  },
+  "devops": {
+    "about": "Windows-only extras (Go, Ruby, Vagrant, Pulumi, Podman, Podman Desktop)",
+    "packages": [
+      "GoLang.Go",
+      "RubyInstallerTeam.RubyWithDevKit.3.2",
+      "Hashicorp.Vagrant",
+      "Pulumi.Pulumi",
+      "RedHat.Podman",
+      "RedHat.Podman-Desktop"
+    ]
+  }
+}

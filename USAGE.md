@@ -124,6 +124,20 @@ Run it as the user whose desktop you want changed: per-user settings go to the a
 that runs it. `-SkipApps`, `-SkipWsl` and `-SkipHarden` leave a part out. Then open
 Ubuntu and follow the Linux steps above.
 
+Pick what the machine is for with personas (the same names as on Linux, plus the
+Windows-only `devops`: Go, Ruby, Vagrant, Pulumi, Podman). `packages.json` is the base
+every machine gets; each persona in [`personas.json`](windows/personas.json) adds its own
+packages. The answer is asked once and saved in `profile.json`:
+
+```powershell
+.\windows\install.ps1 -Persona node,k8s    # or -Persona none for the base only
+.\windows\install.ps1 -ListPackages        # preview the apps; changes nothing, needs no admin
+```
+
+Nothing is ever uninstalled: dropping a persona only stops new installs. Doppler, the
+Supabase CLI and Wrangler have no confirmed winget package, so the Windows `node` persona
+leaves them out (inside WSL the Linux `node` persona installs them).
+
 Per-machine overrides go in `%ProgramData%\dotfiles\config.json` (optional, never
 committed), the Windows counterpart of `config.local.yaml`:
 
@@ -135,7 +149,7 @@ committed), the Windows counterpart of `config.local.yaml`:
 }
 ```
 
-`skipApps` leaves out IDs from `packages.json` (`9NKSQGP7F2NH` is WhatsApp from the
+`skipApps` leaves out IDs from `packages.json` or a persona (`9NKSQGP7F2NH` is WhatsApp from the
 Store), `extraApps` adds winget IDs for this machine only, and `hardenSkip` leaves
 `harden.ps1` sections alone (see `Get-Help .\windows\harden.ps1` for the names).
 Changing `hardenSkip` makes the next run apply hardening again.

@@ -40,39 +40,6 @@
           "PackageIdentifier": "DEVCOM.JetBrainsMonoNerdFont"
         },
         {
-          "PackageIdentifier": "Python.Python.3.13"
-        },
-        {
-          "PackageIdentifier": "OpenJS.NodeJS.LTS"
-        },
-        {
-          "PackageIdentifier": "GoLang.Go"
-        },
-        {
-          "PackageIdentifier": "RubyInstallerTeam.RubyWithDevKit.3.2"
-        },
-        {
-          "PackageIdentifier": "Docker.DockerDesktop"
-        },
-        {
-          "PackageIdentifier": "Kubernetes.kubectl"
-        },
-        {
-          "PackageIdentifier": "Helm.Helm"
-        },
-        {
-          "PackageIdentifier": "Hashicorp.Terraform"
-        },
-        {
-          "PackageIdentifier": "Hashicorp.Vagrant"
-        },
-        {
-          "PackageIdentifier": "Pulumi.Pulumi"
-        },
-        {
-          "PackageIdentifier": "Microsoft.AzureCLI"
-        },
-        {
           "PackageIdentifier": "7zip.7zip"
         },
         {
@@ -92,27 +59,6 @@
         },
         {
           "PackageIdentifier": "Bitwarden.CLI"
-        },
-        {
-          "PackageIdentifier": "RedHat.Podman"
-        },
-        {
-          "PackageIdentifier": "RedHat.Podman-Desktop"
-        },
-        {
-          "PackageIdentifier": "Anthropic.ClaudeCode"
-        },
-        {
-          "PackageIdentifier": "SST.opencode"
-        },
-        {
-          "PackageIdentifier": "astral-sh.uv"
-        },
-        {
-          "PackageIdentifier": "pnpm.pnpm"
-        },
-        {
-          "PackageIdentifier": "Kubernetes.kind"
         },
         {
           "PackageIdentifier": "ajeetdsouza.zoxide"

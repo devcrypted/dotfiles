@@ -23,13 +23,6 @@ jobs:
         with: {extra_args: --all-files}
       - name: Secrets and PII in the full history (same gitleaks as the hooks)
         run: pre-commit run --hook-stage manual gitleaks-history
-      - name: PowerShell lint
-        shell: pwsh
-        run: |
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          $issues = Invoke-ScriptAnalyzer -Path windows -Recurse -ExcludeRule PSAvoidUsingWriteHost
-          $issues | Format-Table -AutoSize
-          if ($issues) { exit 1 }
 
   e2e:
     needs: checks

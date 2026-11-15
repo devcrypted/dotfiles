@@ -55,6 +55,8 @@ needs root, and a run with nothing to change never asks.
 | `./install.sh reinstall ghostty node` | Install the named apps, mise tools or apt packages again from scratch |
 | `./install.sh setup` | Answer the machine profile questions again |
 | `./install.sh --role server --persona node` | Set profile answers without asking (saved) |
+| `./install.sh --skip-apps jan,zed` | Leave those apps out on this machine (`none` clears) |
+| `./install.sh catalog` | Print the choices the web configurator offers, as JSON |
 | `./install.sh --no-once` | Routine sync: skip one-time tasks |
 | `./install.sh --once-only` | Only the one-time tasks |
 | `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |

@@ -49,7 +49,7 @@ in the public `config.yaml`:
 `./install.sh setup` asks again with the saved answers as defaults. When a newer version of
 this repo adds a question, the next run asks only that one and keeps the other answers. Flags answer
 without asking and are saved too: `--role desktop|server`, `--persona node,k8s` (`none` clears), `--gpu`/`--no-gpu`,
-`--docker`/`--no-docker`, `--heavy`/`--no-heavy`, `--harden none|standard|aggressive`, `--cinnamon`/`--no-cinnamon`, and `-y` to take the detected
+`--docker`/`--no-docker`, `--heavy`/`--no-heavy`, `--skip-apps jan,zed` (leave those `apps` out; not a question, `none` clears), `--harden none|standard|aggressive`, `--cinnamon`/`--no-cinnamon`, and `-y` to take the detected
 defaults for anything not given. Without a terminal (CI, cloud-init) the detected
 defaults are used and saved. `config.yaml` can still veto: `docker.enabled: false` or
 `nvidia.enabled: false` wins over a profile that says yes.

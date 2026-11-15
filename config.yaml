@@ -130,12 +130,14 @@ personas:
 #   script: {command, url, apt}  the vendor's install script, run unless `command` is on
 #                                PATH; `apt` names the distro package newer releases have
 #   flatpak: <Flathub app id>    last resort: nothing native exists
+# `about` is the one line the web configurator (web/) shows for the app.
 # `./install.sh upgrade` updates all of them. Removing an app stops installing it; only
 # its mise tools are uninstalled. How-to: MANAGING.md#adding-an-application
 apps:
-  timeshift: {apt: [timeshift]} # system snapshots: `sudo timeshift --create`
-  lazydocker: {when: [docker], mise: {lazydocker: latest}} # Docker TUI
-  doppler: # secrets manager CLI
+  timeshift: {about: "System snapshots you can roll back to", apt: [timeshift]} # `sudo timeshift --create`
+  lazydocker: {about: "Terminal UI for Docker", when: [docker], mise: {lazydocker: latest}}
+  doppler:
+    about: Secrets manager CLI
     when: [persona]
     apt_repo:
       key: https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key
@@ -143,15 +145,17 @@ apps:
       suite: any-version
       packages: [doppler]
   claude-code: # Anthropic's signed apt repo; `stable` trails `latest` by about a week
+    about: Anthropic's coding agent for the terminal
     when: [persona]
     apt_repo:
       key: https://downloads.claude.ai/keys/claude-code.asc
       url: https://downloads.claude.ai/claude-code/apt/stable
       suite: stable
       packages: [claude-code]
-  clipboard: {when: [desktop], apt: [xclip, wl-clipboard]}
-  nvtop: {when: [gpu], apt: [nvtop]} # GPU monitor
+  clipboard: {about: "Copy and paste from the terminal (xclip, wl-clipboard)", when: [desktop], apt: [xclip, wl-clipboard]}
+  nvtop: {about: "GPU monitor", when: [gpu], apt: [nvtop]}
   brave:
+    about: Privacy-minded Chromium browser
     when: [desktop]
     apt_repo:
       key: https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
@@ -159,13 +163,15 @@ apps:
       suite: stable
       packages: [brave-browser]
   vscode: # its package adds Microsoft's apt repo, so apt keeps it updated
+    about: Visual Studio Code editor
     when: [desktop]
     deb:
       package: code
       url:
         amd64: https://update.code.visualstudio.com/latest/linux-deb-x64/stable
         arm64: https://update.code.visualstudio.com/latest/linux-deb-arm64/stable
-  ghostty: # terminal: in the archive from Ubuntu 26.04; community .deb builds before that
+  ghostty: # in the archive from Ubuntu 26.04; community .deb builds before that
+    about: Fast GPU-accelerated terminal
     when: [desktop]
     script:
       command: ghostty
@@ -173,19 +179,22 @@ apps:
       # install.sh, then replace the commit id.
       url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/b59efb59315d98fcf6b0b4ae1640865903e436dc/install.sh
       apt: ghostty
-  bitwarden: # password manager; no apt repo, so `./install.sh upgrade` refetches the .deb
+  bitwarden: # no apt repo, so `./install.sh upgrade` refetches the .deb
+    about: Password manager
     when: [desktop]
     deb:
       package: bitwarden
       url: {amd64: "https://bitwarden.com/download/?app=desktop&platform=linux&variant=deb"}
-  zed: # fast editor with built-in AI; installs to ~/.local and updates itself
+  zed: # installs to ~/.local and updates itself
+    about: Fast editor with built-in AI
     when: [desktop]
     script: {command: zed, url: https://zed.dev/install.sh}
   # Flatpak only: these vendors publish no apt package, repo or .deb.
-  whatsie: {when: [desktop], flatpak: com.ktechpit.whatsie} # WhatsApp client
-  todoist: {when: [desktop], flatpak: com.todoist.Todoist} # Todoist task manager
-  jan: {when: [desktop, heavy], flatpak: ai.jan.Jan} # offline local-LLM chat app
+  whatsie: {about: WhatsApp client, when: [desktop], flatpak: com.ktechpit.whatsie}
+  todoist: {about: Todoist task manager, when: [desktop], flatpak: com.todoist.Todoist}
+  jan: {about: Offline local-LLM chat app, when: [desktop, heavy], flatpak: ai.jan.Jan}
   podman-desktop:
+    about: Containers GUI (Podman)
     when: [desktop, heavy]
     apt: [podman]
     flatpak: io.podman_desktop.PodmanDesktop

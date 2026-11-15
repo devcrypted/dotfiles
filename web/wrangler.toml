@@ -6,3 +6,10 @@ workers_dev = false
 
 # Cloudflare creates the DNS record and certificate for this hostname on deploy.
 routes = [{ pattern = "dot.kamal.sh", custom_domain = true }]
+
+# The configurator page (public/). The Worker runs first so the install scripts keep
+# priority; it hands everything else to the assets.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true

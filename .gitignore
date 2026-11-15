@@ -1,5 +1,17 @@
+# Machine-local config: the only place personal values may live. Never commit these.
 config.local.yaml
 profile.yaml
+config.local.ghostty
+# Secrets, in case one is ever dropped into the clone (the commit checks refuse them too).
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+.netrc
+.claude/settings.local.json
 __pycache__/
 .pytest_cache/
 .ruff_cache/

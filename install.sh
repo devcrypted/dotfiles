@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bootstrap: make sure git, Python >= 3.11 and PyYAML exist, then hand over to dotkit.
 #
-#   ./install.sh [apply|plan|status] [options]      # from a clone
+#   ./install.sh [apply|plan|status|upgrade] [options]   # from a clone
 #   curl -fsSL https://dot.kamal.sh | bash          # fresh machine: clones first
 #   curl -fsSL https://dot.kamal.sh | bash -s -- plan --role server   # with arguments
 #
@@ -55,6 +55,13 @@ main() {
   else
     [[ -d "$CLONE_DIR/.git" ]] || git clone "$REPO_URL" "$CLONE_DIR"
     repo="$CLONE_DIR"
+  fi
+
+  # `upgrade` starts with the dotfiles themselves. A clone with local commits or changes
+  # that can't fast-forward is left as it is: the rest of the upgrade still runs.
+  if [[ "${1:-}" == upgrade && -d "$repo/.git" ]]; then
+    git -C "$repo" pull --ff-only --quiet 2>/dev/null ||
+      echo "note: could not fast-forward $repo (local changes or no upstream); using it as is" >&2
   fi
 
   PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}" exec "$PY3" -m dotkit "$@"

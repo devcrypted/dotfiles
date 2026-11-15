@@ -7,6 +7,7 @@ can't apply (CUDA without an NVIDIA GPU) is not asked at all.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -15,11 +16,12 @@ from pathlib import Path
 from typing import TextIO
 
 from . import system
-from .config import Config, Profile
+from .config import Config, ConfigError, Profile, User
 from .system import Facts
 
 HEADER = """\
-# This machine's answers to ./install.sh onboarding. Gitignored: each machine has its own.
+# This machine's answers to ./install.sh onboarding. Gitignored: each machine has its own,
+# and it is the only place your name and email are kept (config.yaml is public).
 # Edit and rerun, or run `./install.sh setup` to answer the questions again.
 """
 COMMENTS = {
@@ -29,6 +31,7 @@ COMMENTS = {
     "heavy": "apps marked `when: [heavy]` in config.yaml",
     "harden": "none | standard | aggressive: scripts/mint/harden.sh (Linux Mint only)",
     "cinnamon": "apply the saved Cinnamon desktop look in desktop/cinnamon/",
+    "personas": "toolsets from `personas` in config.yaml",
 }
 MINT = "linuxmint"
 
@@ -128,6 +131,22 @@ def onboard(
             )
     base = defaults(facts, hw, str(role))
 
+    if "personas" in given:
+        personas = tuple(given["personas"])  # type: ignore[arg-type]
+    else:
+        personas = default("personas", base.personas)
+        if (ask := asking("personas")) and config.personas:
+            personas = ask.multi(
+                "Personas: toolsets for the work this machine does. Pick any number.",
+                {name: persona.about for name, persona in config.personas.items()},
+                personas,
+            )
+    for name in personas:
+        if name not in config.personas:
+            available = ", ".join(config.personas) or "none defined"
+            raise ConfigError(f"--persona: no such persona {name!r} (available: {available})")
+    needs_docker = [name for name in personas if config.personas[name].docker]
+
     if not hw.gpu:
         gpu = False
         if asking("gpu"):
@@ -141,6 +160,10 @@ def onboard(
 
     if "docker" in given:
         docker = given["docker"]
+    elif needs_docker:
+        docker = True
+        if asking("docker") or asking("personas"):
+            print(f"  - Docker is installed: the {needs_docker[0]} persona needs it.")
     else:
         docker = default("docker", base.docker)
         if ask := asking("docker"):
@@ -196,13 +219,49 @@ def onboard(
         heavy=bool(heavy),
         harden=harden,  # type: ignore[arg-type]
         cinnamon=bool(cinnamon),
+        personas=tuple(personas),
     )
 
 
-def save(path: Path, profile: Profile) -> None:
-    lines = [HEADER, "profile:\n"]
+def identity(config: Config, tty: TextIO | None, detected: User) -> User:
+    """Name and email for git commits: the saved ones, else what git already uses here,
+    confirmed or replaced by the user when ``tty`` is set."""
+    known = User(name=config.user.name or detected.name, email=config.user.email or detected.email)
+    if tty is None:
+        return known
+    print("Git identity for commits. It stays on this machine (profile.yaml); Enter keeps the [default].\n")
+    ask = _Asker(tty)
+    name = ask.text("Name", known.name)
+    email = ask.text("Email", known.email)
+    print()
+    return User(name=name, email=email)
+
+
+def git_identity() -> User:
+    """The identity git already uses on this machine, if any."""
+
+    def get(key: str) -> str:
+        return system.output(["git", "config", "--global", "--get", key]).strip()
+
+    return User(name=get("user.name"), email=get("user.email"))
+
+
+def save(path: Path, profile: Profile, user: User | None = None) -> None:
+    lines = [HEADER]
+    if user and (user.name or user.email):
+        # JSON strings are valid YAML, whatever characters a name contains.
+        lines += [
+            "user:\n",
+            *(f"  {k}: {json.dumps(v, ensure_ascii=False)}\n" for k, v in asdict(user).items()),
+        ]
+    lines.append("profile:\n")
     for key, value in asdict(profile).items():
-        text = str(value).lower() if isinstance(value, bool) else value
+        if isinstance(value, bool):
+            text = str(value).lower()
+        elif isinstance(value, tuple):
+            text = f"[{', '.join(value)}]"
+        else:
+            text = value
         lines.append(f"  {f'{key}: {text}':<16} # {COMMENTS[key]}\n")
     path.write_text("".join(lines))
 
@@ -257,3 +316,34 @@ class _Asker:
 
         hint = "[" + "/".join(k.upper() if v == default else k for k, v in options.items()) + "]"
         return str(self._ask(question, hint, parse))
+
+    def text(self, question: str, default: str) -> str:
+        return str(
+            self._ask(question, f"[{default}]" if default else "[none]", lambda answer: answer or default)
+        )
+
+    def multi(self, question: str, options: dict[str, str], default: object) -> tuple[str, ...]:
+        """Any number of ``options`` (name -> description), by number or by name."""
+        names = list(options)
+        width = max(map(len, names))
+        menu = "".join(f"\n       {i}  {name:<{width}}  {options[name]}" for i, name in enumerate(names, 1))
+
+        def parse(answer: str) -> tuple[str, ...] | None:
+            if answer == "":
+                return tuple(default)  # type: ignore[arg-type]
+            if answer in ("none", "-", "0"):
+                return ()
+            picked = []
+            for token in answer.replace(",", " ").split():
+                if token.isdigit() and 1 <= int(token) <= len(names):
+                    token = names[int(token) - 1]
+                if token not in options:
+                    print("     Please answer with numbers or names from the list, or `none`.")
+                    return None
+                picked.append(token)
+            return tuple(dict.fromkeys(picked))
+
+        shown = ",".join(default) or "none"  # type: ignore[arg-type]
+        return self._ask(
+            f"{question}{menu}\n     Numbers or names, e.g. `1 3`, or `none`", f"[{shown}]", parse
+        )  # type: ignore[return-value]

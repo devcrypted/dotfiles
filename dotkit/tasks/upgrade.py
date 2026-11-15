@@ -1,4 +1,4 @@
-"""Full system upgrade, once on a fresh machine (or on demand with --rerun upgrade)."""
+"""Full system upgrade: once on a fresh machine, and on every `./install.sh upgrade`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from .base import Change, Context, Task
 
 class Upgrade(Task):
     name = "upgrade"
-    summary = "apt full-upgrade on the first run; repeat with --rerun upgrade"
+    summary = "apt full-upgrade on the first run and on `./install.sh upgrade`"
     once = True
 
     def enabled(self, ctx: Context) -> bool:

@@ -20,7 +20,14 @@ curl -fsSL https://dot.kamal.sh | bash
 
 It clones this repo to `~/dotfiles`, asks a few questions about the machine, and sets
 it up. Run it as your normal user, not with `sudo`. Later runs: `~/dotfiles/install.sh`
-(`plan` to preview first).
+(`plan` to preview first, `upgrade` to update everything it installed).
+
+A development server in one line, no questions (personas: `node`, `python`, `k8s`, `ai`,
+`azure`; see [USAGE.md](USAGE.md#personas)):
+
+```bash
+curl -fsSL https://dot.kamal.sh | bash -s -- --role server --persona node -y
+```
 
 ## Windows
 

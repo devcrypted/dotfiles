@@ -8,13 +8,14 @@ They run again when their config section changes or with `--rerun <task>`.
 
 | Task | Kind | What it does |
 | --- | --- | --- |
-| `upgrade` | one-time | `apt full-upgrade` on a fresh machine (`upgrade: true`). |
+| `swap` | always | Creates a swap file at `/swapfile` (size from RAM, or `swap.size`), turns it on and adds it to `/etc/fstab`, but only on a machine with no swap at all. Skipped in containers and on WSL. `swap: {enabled: false}` turns it off. |
+| `upgrade` | one-time | `apt full-upgrade` on a fresh machine (`upgrade: true`), and again on every `./install.sh upgrade`. |
 | `packages` | always | Installs `packages` plus what other enabled tasks need (shells, zsh plugins, …) in one apt run. Never uninstalls. |
 | `repos` | always | Adds each `apt_repos` entry with its own signed-by keyring and installs its packages. Repos removed from config are removed (packages stay). |
 | `links` | always | Symlinks every file in `home/<module>/` to the same path in `$HOME`. Whatever was there is moved to `~/.local/state/dotfiles/backups/<run>/` with the same folder structure. Links for removed files or disabled modules are pruned, as are old GNU Stow links into the repo. |
 | `shellenv` | always | Renders `aliases`, `env`, `path` and `mask` into `~/.config/dotfiles/` for bash/zsh (`alias`) and fish (`abbr`). |
 | `shells` | always | Installs `shells.install`, adds a small managed block to `~/.bashrc` / `~/.zshrc` that loads `home/<shell>/`, and sets the login shell to `shells.default`. Fish needs no block, because it loads `conf.d/` by itself. |
-| `git` | always | Writes `user.name` / `user.email` to the machine-local `~/.gitconfig`. Shared settings are in `~/.config/git/config`. |
+| `git` | always | Writes the name and email from this machine's `profile.yaml` to the machine-local `~/.gitconfig`. Shared settings are in `~/.config/git/config`. |
 | `hooks` | always | Installs this repo's [pre-commit](https://pre-commit.com) checks (see below) so every clone checks commits. `pre_commit: false` turns it off. |
 | `mise` | always | Installs [mise](https://mise.jdx.dev) and syncs global `tools` (runtimes and CLIs, matching your CPU architecture). Tools removed from config are uninstalled. |
 | `fonts` | always | Installs each Nerd Font in `fonts` to `~/.local/share/fonts`. Skipped on WSL and on servers. |
@@ -30,12 +31,15 @@ They run again when their config section changes or with `--rerun <task>`.
 ## Machine profile
 
 The first `./install.sh` (or `plan`) on a machine detects its hardware (RAM, CPUs,
-NVIDIA GPU, desktop session) and asks up to six questions. The answers go into
-`profile.yaml` (gitignored), so they're asked only once:
+NVIDIA GPU, desktop session) and asks up to seven questions, then your git name and
+email (defaults: what git already uses on the machine). The answers go into
+`profile.yaml` (gitignored), so they're asked only once, and nothing personal is ever
+in the public `config.yaml`:
 
 | Question | Default | Effect |
 | --- | --- | --- |
 | Desktop or server? | desktop when a desktop session or display manager exists (not WSL) | A server gets no `when: [desktop]` apps and no fonts. |
+| Personas? | none | Adds each selected persona's packages, mise tools, apps, modules and aliases ([list](USAGE.md#personas)). A persona that needs Docker installs it, so that question is skipped. |
 | NVIDIA driver and CUDA? | yes; not asked without an NVIDIA GPU | `nvidia`, `cuda` and `when: [gpu]` apps. |
 | Docker? | yes on a desktop with 4 GB+ RAM, no on a server | `docker` and `when: [docker]` apps. |
 | Heavy apps? | yes on a desktop with 8 GB+ RAM, no on a server | `when: [heavy]` apps. |
@@ -44,7 +48,7 @@ NVIDIA GPU, desktop session) and asks up to six questions. The answers go into
 
 `./install.sh setup` asks again with the saved answers as defaults. When a newer version of
 this repo adds a question, the next run asks only that one and keeps the other answers. Flags answer
-without asking and are saved too: `--role desktop|server`, `--gpu`/`--no-gpu`,
+without asking and are saved too: `--role desktop|server`, `--persona node,k8s` (`none` clears), `--gpu`/`--no-gpu`,
 `--docker`/`--no-docker`, `--heavy`/`--no-heavy`, `--harden none|standard|aggressive`, `--cinnamon`/`--no-cinnamon`, and `-y` to take the detected
 defaults for anything not given. Without a terminal (CI, cloud-init) the detected
 defaults are used and saved. `config.yaml` can still veto: `docker.enabled: false` or
@@ -74,10 +78,11 @@ Every `git commit` in this repo runs the following. If any check fails, the comm
 
 - **Secrets:** [gitleaks](https://github.com/gitleaks/gitleaks) with its full default rule
   set, plus `detect-private-key`, and a list of file names that are never allowed
-  (`config.local.yaml`, `.env`, `id_*`, `*.pem`/`*.key`, `hosts.yml`, `credentials`, …).
-- **Personal data:** gitleaks rules in `.gitleaks.toml` for email addresses (yours and
+  (`config.local.yaml`, `profile.yaml`, `.env`, `id_*`, `*.pem`/`*.key`, `hosts.yml`,
+  `credentials`, …).
+- **Personal data:** gitleaks rules in `.gitleaks.toml` for email addresses (only
   placeholders are allowed), public IP addresses, UUIDs (cloud tenant/subscription IDs),
-  phone numbers and card numbers.
+  home directory paths that name a real user, phone numbers and card numbers.
 - **Blocked words:** anything in `blocked_words` (set it in `config.local.yaml`, e.g. an
   employer's or client's name) may never appear in a committed file.
 - **Quality:** ruff (lint + format), shellcheck, shfmt, fish_indent, `zsh -n`,

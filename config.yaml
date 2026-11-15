@@ -3,12 +3,13 @@
 # (gitignored, deep-merged on top; set a key to null there to drop it).
 #
 # Each machine also has a profile.yaml (gitignored), written by the questions asked on
-# the first run: desktop or server, NVIDIA GPU, Docker, heavy apps. It decides which
-# `apps` below apply. `./install.sh setup` asks again.
-
-user:
-  name: Kamal Kumar
-  email: kamal2k89@gmail.com
+# the first run: desktop or server, personas, NVIDIA GPU, Docker, heavy apps, and your
+# git name and email. It decides which `personas` and `apps` below apply.
+# `./install.sh setup` asks again.
+#
+# This file is public. Nothing personal belongs here: no names, emails, hostnames, IPs,
+# tokens or keys. Those go in profile.yaml or config.local.yaml, which never leave the
+# machine. Git identity (`user: {name, email}`) is one of them.
 
 shells:
   default: fish # login shell
@@ -17,7 +18,7 @@ shells:
 prompt: starship # starship | builtin (no dependencies; shows path, git branch, exit status)
 
 # Dotfile modules to link from home/<module>/ (shell modules follow shells.install).
-modules: [git, nvim, tmux, starship, kind, ghostty, atuin, herdr, lazygit]
+modules: [git, nvim, tmux, starship, ghostty, atuin, lazygit]
 
 # apt packages from the distro archive, on every machine (desktop apps go in `apps`).
 # Removing one here does not uninstall it.
@@ -30,6 +31,7 @@ packages:
   - git
   - gh
   - htop
+  - btop # system monitor
   - jq
   - ripgrep
   - fd-find
@@ -45,51 +47,108 @@ packages:
 # url/suite/components may use {distro}, {codename}, {version} and {arch}.
 apt_repos: {}
 
-# Runtimes and CLI tools managed by mise (https://mise.jdx.dev/registry.html).
-# Removing an entry uninstalls it.
+# CLI tools every machine gets, managed by mise (https://mise.jdx.dev/registry.html).
+# Only tools the distro archives lack or ship too old go here; otherwise use `packages`.
+# Runtimes and work-specific tools belong to a persona below. Removing an entry
+# uninstalls it; `./install.sh upgrade` moves `latest`/`lts` to the newest release.
 tools:
-  node: lts
-  pnpm: latest
-  python: latest
-  uv: latest
-  kubectl: latest
-  kind: latest
-  helm: latest
-  terraform: latest
-  fzf: latest
-  zoxide: latest
+  fzf: latest # the archive's is too old for `fzf --bash`/`--zsh`/`--fish`
+  zoxide: latest # smarter cd
   eza: latest # modern ls (ll, la, lt)
-  bat: latest # cat with syntax highlighting
+  bat: latest # cat with syntax highlighting (the apt package names it batcat)
   starship: latest
-  supabase: latest # Supabase CLI (local stack runs in Docker)
-  wrangler: latest # Cloudflare Workers/Pages CLI
-  rtk: latest # compresses command output for AI agents (hook: CLOUD.md#token-savings)
-  # AI coding assistants. Not self-updating: `mise upgrade` refreshes them.
-  claude: latest # Claude Code
-  opencode: latest
-  herdr: latest # tmux-like multiplexer that shows which AI agents are blocked/working/idle
-  # Terminal helpers
   lazygit: latest # git TUI
-  lazydocker: latest # Docker TUI
   yq: latest # YAML/JSON/TOML processor (jq is in packages)
   atuin: latest # searchable shell history
-  btop: latest # system monitor
   delta: latest # readable git diffs
-  "npm:cline": latest # Cline CLI (the VS Code extension is separate)
 
-# Applications that only some machines get. `when` lists profile answers that must all
-# hold: desktop | server | heavy | docker | gpu (no `when`: every machine). An app may
-# use several sources; all of them are installed:
-#   apt: [pkg, ...]              distro packages
-#   apt_repo: {key, url, suite, components, packages}   a vendor repo (as in apt_repos)
-#   flatpak: <Flathub app id>    see flathub.org; installed system-wide
-#   deb: {package, url: {amd64: <url>, arm64: <url>}}   a .deb download
-#   script: {command, url}       an install script, run unless `command` is on PATH
+# Personas: toolsets for one kind of work. A machine's profile selects any number
+# (asked on the first run; `--persona node,k8s` or `./install.sh setup` changes it), and
+# each adds to the base above. Dropping a persona uninstalls its mise tools.
+#   about: one line shown in the question      docker: true = needs Docker (installs it)
+#   packages: apt packages                     tools: mise tools (as in `tools`)
+#   apps: names from `apps` that list `persona` in `when` (personas can share them)
+#   modules: home/<module>/ to link            aliases: as in `aliases`
+# A tool may be named by several personas, with one version everywhere.
+personas:
+  node:
+    about: Node.js web development (pnpm, Wrangler, Supabase, Doppler, Claude Code, Docker)
+    docker: true # Supabase's local stack and project services run in containers
+    tools:
+      node: lts
+      pnpm: latest
+      wrangler: latest # Cloudflare Workers/Pages CLI
+      supabase: latest # Supabase CLI
+    apps: [doppler, claude-code]
+  python:
+    about: Python development (latest Python, uv)
+    tools:
+      python: latest
+      uv: latest
+  k8s:
+    about: Kubernetes and infrastructure (kubectl, kind, Helm, Terraform, Docker)
+    docker: true # kind runs its cluster nodes as containers
+    tools:
+      kubectl: latest
+      kind: latest
+      helm: latest
+      terraform: latest
+    modules: [kind]
+    aliases:
+      k: kubectl
+      h: helm
+      tf: terraform
+      kgp: kubectl get pods -o wide
+      kgn: kubectl get nodes -o wide
+      kga: kubectl get pods -o wide -A
+      create-cluster: kind create cluster --name kind-main --config ~/.config/kind/cluster.yaml
+      delete-cluster: kind delete cluster --name kind-main
+  ai:
+    about: AI coding agents (Claude Code, opencode, Cline, herdr, rtk)
+    tools:
+      node: lts # Cline is an npm package
+      opencode: latest
+      "npm:cline": latest # Cline CLI (the VS Code extension is separate)
+      herdr: latest # tmux-like multiplexer that shows which agents are blocked/working/idle
+      rtk: latest # compresses command output for AI agents (hook: CLOUD.md#token-savings)
+    apps: [claude-code]
+    modules: [herdr]
+  azure:
+    about: Azure administration (Azure CLI, PowerShell)
+    tools:
+      azure: latest
+      powershell: latest # needs libicu
+
+# Applications that only some machines get. `when` lists conditions that must all hold:
+# desktop | server | heavy | docker | gpu are profile answers, `persona` means a selected
+# persona lists the app (no `when`: every machine). Sources, most preferred first; use
+# the first one that exists for the app (an app may combine several, all are installed):
+#   apt: [pkg, ...]              distro packages: always the first choice
+#   apt_repo: {key, url, suite, components, packages}   the vendor's apt repo (as in apt_repos)
+#   deb: {package, url: {amd64: <url>, arm64: <url>}}   the vendor's .deb download
 #   mise: {tool: version}        like `tools`
-# Removing an app stops installing it; only its mise tools are uninstalled.
-# How-to and examples: MANAGING.md#adding-an-application
+#   script: {command, url, apt}  the vendor's install script, run unless `command` is on
+#                                PATH; `apt` names the distro package newer releases have
+#   flatpak: <Flathub app id>    last resort: nothing native exists
+# `./install.sh upgrade` updates all of them. Removing an app stops installing it; only
+# its mise tools are uninstalled. How-to: MANAGING.md#adding-an-application
 apps:
   timeshift: {apt: [timeshift]} # system snapshots: `sudo timeshift --create`
+  lazydocker: {when: [docker], mise: {lazydocker: latest}} # Docker TUI
+  doppler: # secrets manager CLI
+    when: [persona]
+    apt_repo:
+      key: https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key
+      url: https://packages.doppler.com/public/cli/deb/debian
+      suite: any-version
+      packages: [doppler]
+  claude-code: # Anthropic's signed apt repo; `stable` trails `latest` by about a week
+    when: [persona]
+    apt_repo:
+      key: https://downloads.claude.ai/keys/claude-code.asc
+      url: https://downloads.claude.ai/claude-code/apt/stable
+      suite: stable
+      packages: [claude-code]
   clipboard: {when: [desktop], apt: [xclip, wl-clipboard]}
   nvtop: {when: [gpu], apt: [nvtop]} # GPU monitor
   brave:
@@ -106,22 +165,28 @@ apps:
       url:
         amd64: https://update.code.visualstudio.com/latest/linux-deb-x64/stable
         arm64: https://update.code.visualstudio.com/latest/linux-deb-arm64/stable
-  ghostty: # terminal; .deb builds for Ubuntu 24.04+/Mint 22+/Debian 13+
+  ghostty: # terminal: in the archive from Ubuntu 26.04; community .deb builds before that
     when: [desktop]
     script:
       command: ghostty
       url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh
-  bitwarden: {when: [desktop], flatpak: com.bitwarden.desktop}
+      apt: ghostty
+  bitwarden: # password manager; no apt repo, so `./install.sh upgrade` refetches the .deb
+    when: [desktop]
+    deb:
+      package: bitwarden
+      url: {amd64: "https://bitwarden.com/download/?app=desktop&platform=linux&variant=deb"}
+  zed: # fast editor with built-in AI; installs to ~/.local and updates itself
+    when: [desktop]
+    script: {command: zed, url: https://zed.dev/install.sh}
+  # Flatpak only: these vendors publish no apt package, repo or .deb.
   whatsie: {when: [desktop], flatpak: com.ktechpit.whatsie} # WhatsApp client
   todoist: {when: [desktop], flatpak: com.todoist.Todoist} # Todoist task manager
-  zed: {when: [desktop], flatpak: dev.zed.Zed} # fast editor with built-in AI
   jan: {when: [desktop, heavy], flatpak: ai.jan.Jan} # offline local-LLM chat app
   podman-desktop:
     when: [desktop, heavy]
     apt: [podman]
     flatpak: io.podman_desktop.PodmanDesktop
-  powershell: {when: [heavy], mise: {powershell: latest}} # needs libicu
-  azure-cli: {when: [heavy], mise: {azure: latest}}
 
 fonts: [JetBrainsMono] # Nerd Fonts for prompt icons (skipped on WSL and servers)
 
@@ -162,20 +227,12 @@ harden:
   # debloat, telemetry, services, firewall, kernel, updates, desktop, cleanup
   skip: []
 
-# Aliases become `alias` in bash/zsh and `abbr` in fish.
+# Aliases become `alias` in bash/zsh and `abbr` in fish (personas add their own).
 aliases:
   g: git
   v: nvim
   vim: nvim
-  k: kubectl
-  h: helm
-  tf: terraform
-  kgp: kubectl get pods -o wide
-  kgn: kubectl get nodes -o wide
-  kga: kubectl get pods -o wide -A
   projects: cd ~/projects
-  create-cluster: kind create cluster --name kind-main --config ~/.config/kind/cluster.yaml
-  delete-cluster: kind delete cluster --name kind-main
 
 env:
   EDITOR: nvim
@@ -188,7 +245,13 @@ mask:
   - pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     replace: "********-****-****-****-************"
 
-upgrade: true # apt full-upgrade on the first run (again: --rerun upgrade)
+upgrade: true # apt full-upgrade on the first run (later: ./install.sh upgrade)
+# A swap file for machines that have no swap at all (small cloud VMs run out of memory
+# on builds without one). Existing swap of any kind is left alone; containers and WSL
+# are skipped. Opt a machine out in config.local.yaml: `swap: {enabled: false}`.
+swap:
+  enabled: true
+  size: auto # auto: 2x RAM up to 2 GB, RAM up to 8 GB, else 4G. Or a size, e.g. 4G
 # docker and nvidia also need a "yes" in the machine's profile; `false` here vetoes them.
 docker:
   enabled: true # an existing docker install (docker.io, Docker Desktop) is kept

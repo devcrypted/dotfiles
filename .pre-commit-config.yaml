@@ -10,10 +10,10 @@ repos:
   - repo: local
     hooks:
       - id: forbidden-files
-        name: forbidden files (keys, credentials, local config)
+        name: forbidden files (keys, credentials, machine-local config)
         language: fail
         entry: these files must never be committed
-        files: (?i)(^|/)(config\.local\.yaml|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
+        files: (?i)(^|/)(config\.local\.yaml|profile\.yaml|profile\.json|config\.json|settings\.local\.json|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
       - id: blocked-words
         name: blocked words (blocked_words in config.local.yaml)
         # Own venv: `python3` on PATH may be a mise/pyenv build without PyYAML.

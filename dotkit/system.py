@@ -278,6 +278,17 @@ def ram_gb(meminfo: Path = Path("/proc/meminfo")) -> int:
     return 0
 
 
+def swaps(table: Path = Path("/proc/swaps")) -> list[str]:
+    """Active swap devices and files."""
+    return [line.split()[0] for line in _read(table).splitlines()[1:] if line.strip()]
+
+
+def in_container() -> bool:
+    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
+        return True
+    return subprocess.run(["systemd-detect-virt", "--container", "--quiet"], check=False).returncode == 0
+
+
 def has_desktop() -> bool:
     """True when a graphical session is running or a display manager is installed."""
     if any(os.environ.get(v) for v in ("XDG_CURRENT_DESKTOP", "WAYLAND_DISPLAY", "DISPLAY")):

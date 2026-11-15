@@ -13,15 +13,35 @@ git clone https://github.com/devcrypted/dotfiles.git ~/dotfiles && cd ~/dotfiles
 curl -fsSL https://dot.kamal.sh | bash -s -- plan   # same, straight from the URL
 ```
 
-The first run checks the hardware and asks a few questions: desktop or server, NVIDIA
-driver and CUDA (only if there's an NVIDIA GPU), Docker, heavy apps, and on Linux Mint
-how hard to debloat and harden it. The answers are saved in `profile.yaml` (gitignored)
-and pick which `apps` this machine gets: a server gets CLI tools only. For an
-unattended install, answer with flags:
+The first run checks the hardware and asks a few questions: desktop or server, which
+personas (toolsets such as `node` or `k8s`), NVIDIA driver and CUDA (only if there's an
+NVIDIA GPU), Docker, heavy apps, on Linux Mint how hard to debloat and harden it, and
+your git name and email. The answers are saved in `profile.yaml` (gitignored) and pick
+what this machine gets: a server gets CLI tools only. For an unattended install, answer
+with flags:
 
 ```bash
 ./install.sh --role server --no-docker --no-heavy    # or -y for the detected defaults
+./install.sh --role server --persona node -y         # a Node.js development server
+curl -fsSL https://dot.kamal.sh | bash -s -- --role server --persona node,ai -y
 ```
+
+### Personas
+
+A persona is a named toolset in `config.yaml`. Every machine gets the base (shell, git,
+editor, terminal tools); personas add what the machine is for, and they combine.
+
+| Persona | Adds |
+| --- | --- |
+| `node` | Node.js LTS, pnpm, Wrangler, Supabase CLI, Doppler CLI, Claude Code, Docker |
+| `python` | Latest Python, uv |
+| `k8s` | kubectl, kind, Helm, Terraform, their aliases, Docker |
+| `ai` | Claude Code, opencode, Cline, herdr, rtk |
+| `azure` | Azure CLI, PowerShell |
+
+Change them later with `./install.sh setup` or `--persona a,b` (`--persona none` for the
+base only). Dropping a persona uninstalls its mise tools. To add or edit one, see
+[MANAGING.md](MANAGING.md#adding-a-persona).
 
 Run it as your normal user, not with `sudo`. It asks for your password when it
 needs root, and a run with nothing to change never asks.
@@ -31,8 +51,10 @@ needs root, and a run with nothing to change never asks.
 | `./install.sh` | Apply everything, including pending one-time tasks |
 | `./install.sh plan` | Show every change it would make |
 | `./install.sh status` | One line per task: ok, pending, or done (one-time) |
+| `./install.sh upgrade` | Pull this repo, apply it, then upgrade everything: `apt full-upgrade`, mise tools, flatpaks and .debs no apt repo tracks |
+| `./install.sh reinstall ghostty node` | Install the named apps, mise tools or apt packages again from scratch |
 | `./install.sh setup` | Answer the machine profile questions again |
-| `./install.sh --role server --no-docker` | Set profile answers without asking (saved) |
+| `./install.sh --role server --persona node` | Set profile answers without asking (saved) |
 | `./install.sh --no-once` | Routine sync: skip one-time tasks |
 | `./install.sh --once-only` | Only the one-time tasks |
 | `./install.sh --rerun nvidia,upgrade` | Run one-time tasks again |
@@ -53,8 +75,9 @@ for one machine in `config.local.yaml` (gitignored, merged last; `null` removes 
 ```yaml
 # config.local.yaml
 shells: {default: bash}          # keep bash as the login shell
-tools: {terraform: null}         # don't install terraform here
+tools: {atuin: null}             # don't install atuin here
 upgrade: false                   # no apt full-upgrade on the first run
+swap: {enabled: false}           # don't create a swap file (or: {size: 8G})
 ssh: {generate_key: false}
 harden: {skip: [firewall]}       # Mint: leave ufw alone
 ```

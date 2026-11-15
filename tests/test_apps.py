@@ -70,8 +70,8 @@ def test_one_failing_app_does_not_stop_the_run(ctx, monkeypatch, capsys):
     def boom(*args, **kwargs):
         raise CommandError(["bash", "-s"], 1, "not compatible")
 
-    monkeypatch.setattr(apps, "_run_script", boom)
-    monkeypatch.setattr(apps, "_install_deb", lambda *a: None)
+    monkeypatch.setattr(apps, "run_script", boom)
+    monkeypatch.setattr(apps, "install_deb", lambda *a: None)
     apply(Apps().plan(ctx))
     assert any(n.startswith("ghostty was not installed") for n in ctx.notes)
 

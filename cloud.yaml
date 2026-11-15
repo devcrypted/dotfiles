@@ -4,34 +4,31 @@
 # Claude runs non-interactive bash: keep only what Claude itself uses.
 # Environment settings to pair it with: CLOUD.md
 
-profile: {role: server, gpu: false, docker: false, heavy: false}
+# node and k8s personas, not python (preinstalled) or ai (Claude is the host here).
+profile: {role: server, gpu: false, docker: false, heavy: false, personas: [node, k8s]}
+personas:
+  node: {apps: []} # Claude Code is already here; list doppler if a project needs it
 
 shells: {default: bash, install: [bash]} # Claude runs bash; fish/zsh add nothing
-modules: [kind, cloud] # not git: its credential helper would replace the cloud's GitHub proxy
+modules: [cloud] # not git: its credential helper would replace the cloud's GitHub proxy
 
-tools: # python, uv are preinstalled (node is too, but older than LTS); the rest are terminal-only
-  python: null
-  uv: null
+tools: # the base tools are for interactive terminals; Claude uses none of them
   starship: null
   fzf: null
   zoxide: null
   eza: null
   bat: null
-  herdr: null
   lazygit: null
-  lazydocker: null
   yq: null
   atuin: null
-  btop: null
   delta: null
-  claude: null
-  opencode: null
-  "npm:cline": null
+  rtk: latest # compresses command output (hook: CLOUD.md#token-savings)
 
 apps: {timeshift: null}
 fonts: []
 upgrade: false # a full-upgrade would blow the 5-minute budget
-docker: {enabled: false} # preinstalled
+docker: {enabled: false} # preinstalled; this also overrides the personas' need for it
+swap: {enabled: false}
 nvidia: {enabled: false}
 ssh: {generate_key: false}
 sudo_nopasswd: false

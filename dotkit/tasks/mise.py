@@ -42,6 +42,13 @@ class Mise(Task):
             changes.append(Change("install missing tool versions", partial(run, argv)))
         return changes
 
+    def upgrade(self, ctx: Context) -> list[Change]:
+        if not ctx.config.tools or shutil.which("mise") is None:
+            return []
+        # --bump is not used: versions stay what config.yaml says (latest, lts, 22, ...).
+        argv = ["mise", "upgrade", "--yes"]
+        return [Change("upgrade mise tools to their newest versions", partial(run, argv))]
+
     def commit(self, ctx: Context) -> None:
         ctx.state.put("mise_tools", sorted(ctx.config.tools))
 

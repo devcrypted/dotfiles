@@ -7,9 +7,10 @@ what that VM can reach and what runs before Claude starts. This page fills in ea
 field of the environment dialog so every session starts with these dotfiles.
 
 `./install.sh cloud` does the machine side. It links `config.local.yaml` to
-[`cloud.yaml`](cloud.yaml) and applies, so the VM gets bash, your git identity and
-aliases, and these from mise: node (LTS), pnpm, the Supabase CLI, wrangler, kubectl,
-kind, helm, terraform and [rtk](#token-savings). It skips:
+[`cloud.yaml`](cloud.yaml) and applies, so the VM gets bash, the
+aliases, and the `node` and `k8s` personas' mise tools: node (LTS), pnpm, the Supabase
+CLI, wrangler, kubectl, kind, helm and terraform, plus [rtk](#token-savings). Commits
+use the git identity the cloud session provides (none is stored in this repo). It skips:
 
 - What the VM already has: Docker with Compose, python and uv. The VM has node too,
   but an older one than the LTS.

@@ -113,9 +113,11 @@ def test_full_example_resolves_for_desktop_and_server():
 
 def test_cloud_overlay_keeps_only_what_claude_uses():
     cfg = load(Path("config.yaml"), Path("cloud.yaml"), home_dir=Path("home"))
-    assert cfg.profile == Profile(role="server", gpu=False, docker=False, heavy=False)
+    assert cfg.profile == Profile(
+        role="server", gpu=False, docker=False, heavy=False, personas=("node", "k8s")
+    )
     cloud = resolve(cfg, nvidia_gpu=False)
-    assert cloud.enabled_modules == ("bash", "shell", "kind", "cloud")
+    assert cloud.enabled_modules == ("bash", "shell", "cloud", "kind")
     assert cloud.tools.keys() == {
         "node",
         "pnpm",
@@ -128,6 +130,7 @@ def test_cloud_overlay_keeps_only_what_claude_uses():
         "rtk",
     }
     assert not cloud.apps and not cloud.fonts and not cloud.upgrade and not cloud.docker.enabled
+    assert not cloud.swap.enabled
 
 
 # -- onboarding -------------------------------------------------------------------------

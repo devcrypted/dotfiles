@@ -20,9 +20,11 @@ from .shellenv import ShellEnv
 from .shells import Shells
 from .ssh import Ssh
 from .sudo import Sudo
+from .swap import Swap
 from .upgrade import Upgrade
 
 TASKS: tuple[Task, ...] = (
+    Swap(),  # first: small machines need it for the installs below
     Upgrade(),
     Packages(),
     Repos(),

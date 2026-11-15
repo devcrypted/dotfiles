@@ -12,7 +12,12 @@ apt_repos:
 apps:
   tree: {apt: [tree]}
   cowsay: {when: [desktop], apt: [cowsay]} # this is a server: must not be installed
-profile: {role: server, gpu: false, docker: false, heavy: false}
+  figlet: {when: [persona], apt: [figlet]} # listed by the selected persona
+  toilet: {when: [persona], apt: [toilet]} # listed by no selected persona: must not be installed
+personas:
+  demo: {about: selected, packages: [sl], apps: [figlet], aliases: {demo: echo demo}}
+  other: {about: not selected, packages: [bb], apps: [toilet]}
+profile: {role: server, gpu: false, docker: false, heavy: false, personas: [demo]}
 tools: {starship: latest, zoxide: latest, eza: latest}
 aliases: {g: git, kgp: kubectl get pods -o wide}
 env: {EDITOR: nvim}

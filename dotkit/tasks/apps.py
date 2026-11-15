@@ -38,8 +38,7 @@ class Apps(Task):
         installed = set(output(["flatpak", "list", "--app", "--columns=application"]).split())
         missing = {name: app_id for name, app_id in flatpaks.items() if app_id not in installed}
         for name, app_id in missing.items():
-            argv = ["flatpak", "install", "--system", "-y", "--noninteractive", "flathub", app_id]
-            install = partial(run, argv, root=True)
+            install = partial(install_flatpak, app_id)
             changes.append(_guarded(ctx, name, f"install {name} (flatpak {app_id})", install))
         if missing:
             ctx.note("New flatpak apps show up in the app menu after you log out and back in.")
@@ -50,16 +49,48 @@ class Apps(Task):
                 if url is None:
                     ctx.note(f"{name}: no .deb for {ctx.facts.arch} in apps.{name}.deb.url; skipped")
                 else:
-                    install = partial(_install_deb, ctx, app.deb, url)
+                    install = partial(install_deb, ctx, app.deb, url)
                     changes.append(_guarded(ctx, name, f"install {name} (.deb)", install))
-            if app.script and shutil.which(app.script.command) is None:
-                install = partial(_run_script, app.script)
-                changes.append(_guarded(ctx, name, f"install {name} (script {app.script.url})", install))
+            if app.script and not _on_path(ctx, app.script.command):
+                package = app.script.apt
+                if package and ctx.apt.available(package):  # native beats the script
+                    install = partial(ctx.apt.install, [package])
+                    changes.append(_guarded(ctx, name, f"install {name} (apt {package})", install))
+                else:
+                    install = partial(run_script, app.script)
+                    changes.append(_guarded(ctx, name, f"install {name} (script {app.script.url})", install))
+        return changes
+
+    def upgrade(self, ctx: Context) -> list[Change]:
+        """Flatpaks, and .debs that didn't bring an apt repo along (apt upgrades the rest;
+        script-installed apps update themselves or through the package they installed)."""
+        changes = []
+        if _flatpaks(ctx):
+            argv = ["flatpak", "update", "--system", "-y", "--noninteractive"]
+            changes.append(Change("update flatpak apps", partial(run, argv, root=True)))
+        for name, app in ctx.config.apps.items():
+            url = app.deb.url.get(ctx.facts.arch) if app.deb else None
+            if not (app.deb and url and ctx.apt.installed([app.deb.package])):
+                continue
+            if not ctx.apt.repo_managed(app.deb.package):
+                summary = f"reinstall {name} from its latest .deb (no apt repo tracks it)"
+                changes.append(_guarded(ctx, name, summary, partial(install_deb, ctx, app.deb, url)))
         return changes
 
 
 def _flatpaks(ctx: Context) -> dict[str, str]:
     return {name: app.flatpak for name, app in ctx.config.apps.items() if app.flatpak}
+
+
+def _on_path(ctx: Context, command: str) -> bool:
+    # ~/.local/bin may not be on this process's PATH yet (vendor scripts install there).
+    return shutil.which(command) is not None or (ctx.home / ".local" / "bin" / command).exists()
+
+
+def install_flatpak(app_id: str, reinstall: bool = False) -> None:
+    extra = ["--reinstall"] if reinstall else []
+    argv = ["flatpak", "install", "--system", "-y", "--noninteractive", *extra, "flathub", app_id]
+    run(argv, root=True)
 
 
 def _guarded(ctx: Context, name: str, summary: str, install: Callable[[], object]) -> Change:
@@ -76,7 +107,7 @@ def _guarded(ctx: Context, name: str, summary: str, install: Callable[[], object
     return Change(summary, apply)
 
 
-def _install_deb(ctx: Context, deb: Deb, url: str) -> None:
+def install_deb(ctx: Context, deb: Deb, url: str) -> None:
     # apt drops privileges to _apt to read local files, so keep them world-readable.
     with tempfile.TemporaryDirectory() as tmp:
         Path(tmp).chmod(0o755)
@@ -86,5 +117,5 @@ def _install_deb(ctx: Context, deb: Deb, url: str) -> None:
         ctx.apt.install([str(path)])
 
 
-def _run_script(script: Script) -> None:
+def run_script(script: Script) -> None:
     run(["bash", "-s"], input=fetch(script.url).decode(), calls_sudo=True)

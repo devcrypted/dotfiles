@@ -1,4 +1,5 @@
-"""Command line entry point: ``apply`` (default), ``plan``, ``status``, ``setup``, ``cloud`` and ``adopt``."""
+"""Command line entry point: ``apply`` (default), ``plan``, ``status``, ``upgrade``, ``reinstall``,
+``setup``, ``cloud`` and ``adopt``."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from . import onboard, system
+from . import onboard, reinstall, system
 from .adopt import AdoptError, adopt
 from .apt import Apt
 from .config import Config, ConfigError, Profile, load, resolve
@@ -20,6 +21,8 @@ from .system import CommandError, Facts, UnsupportedSystem, detect, sudo
 from .tasks import TASKS, Context, Task
 
 REPO = Path(__file__).resolve().parent.parent
+# Commands that ask the profile questions when this machine hasn't answered them yet.
+_ONBOARDING = ("apply", "plan", "upgrade")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,8 +33,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "adopt":
         return _adopt(args)
-    if args.paths:
-        _error(f"unexpected arguments: {' '.join(map(str, args.paths))} (only `adopt` takes paths)")
+    if args.names and args.command != "reinstall":
+        _error(f"unexpected arguments: {' '.join(args.names)} (only `adopt` and `reinstall` take any)")
         return 2
     if args.command == "cloud":
         try:
@@ -50,10 +53,15 @@ def main(argv: list[str] | None = None) -> int:
         print("Saved profile.yaml. Preview with ./install.sh plan, apply with ./install.sh")
         return 0
     try:
+        if args.command == "reinstall":
+            return _reinstall(ctx, args.names)
         return Runner(ctx, args).run(tasks)
     except KeyboardInterrupt:
         print("\ninterrupted")
         return 130
+    except BrokenPipeError:  # output piped into `head` or a pager that quit
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 141
     finally:
         sudo.stop()
 
@@ -69,12 +77,18 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         "command",
         nargs="?",
         default="apply",
-        choices=("apply", "plan", "status", "setup", "cloud", "adopt"),
+        choices=("apply", "plan", "status", "upgrade", "reinstall", "setup", "cloud", "adopt"),
         help="apply changes (default), show planned changes, summarise each task, "
+        "apply and also upgrade everything installed (apt, mise tools, flatpaks, .debs), "
+        "reinstall the named apps, tools or packages, "
         "answer the machine profile questions again, set up a Claude Code cloud environment "
         "(applies cloud.yaml), or adopt existing config files into the repo",
     )
-    p.add_argument("paths", nargs="*", type=Path, help="adopt: files or directories under $HOME")
+    p.add_argument(
+        "names",
+        nargs="*",
+        help="adopt: files or directories under $HOME; reinstall: apps, tools or packages",
+    )
     p.add_argument("--module", help="adopt: module name under home/ (default: guessed from the path)")
     p.add_argument("--config", type=Path, help="config file (default: config.yaml)")
     p.add_argument("--only", type=_csv, default=[], metavar="TASK,..", help="run only these tasks")
@@ -86,6 +100,14 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("-v", "--verbose", action="store_true", help="show every command and its output")
     prof = p.add_argument_group("machine profile (saved to profile.yaml; asked on the first run)")
     prof.add_argument("--role", choices=("desktop", "server"), help="server: CLI only, no GUI apps or fonts")
+    prof.add_argument(
+        "--persona",
+        "--personas",
+        dest="personas",
+        type=_personas,
+        metavar="NAME,..",
+        help="toolsets from `personas` in config.yaml, e.g. node,k8s (`none` for the base only)",
+    )
     for name, what in (("gpu", "NVIDIA driver + CUDA"), ("docker", "Docker Engine"), ("heavy", "heavy apps")):
         prof.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, help=what)
     prof.add_argument(
@@ -103,12 +125,13 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
 
 
 def _adopt(args: argparse.Namespace) -> int:
-    if not args.paths:
+    if not args.names:
         _error("adopt needs at least one path, e.g. ./install.sh adopt ~/.config/htop")
         return 2
     config = _config_path(args)
     try:
-        messages = adopt(args.paths, repo=REPO, home=Path.home(), config=config, module=args.module)
+        paths = [Path(name) for name in args.names]
+        messages = adopt(paths, repo=REPO, home=Path.home(), config=config, module=args.module)
     except AdoptError as exc:
         _error(str(exc))
         return 2
@@ -116,8 +139,31 @@ def _adopt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reinstall(ctx: Context, names: list[str]) -> int:
+    if not names:
+        _error("reinstall needs at least one name, e.g. ./install.sh reinstall ghostty node")
+        return 2
+    try:
+        changes = reinstall.plan(ctx, names)
+        for change in changes:
+            print(f"  {change.summary}", flush=True)
+            change.apply()
+    except ConfigError as exc:
+        _error(str(exc))
+        return 2
+    except (CommandError, OSError) as exc:
+        _error(f"{exc}\n{getattr(exc, 'output', '').strip()}".strip())
+        return 1
+    print(f"Done: {len(changes)} reinstalled.")
+    return 0
+
+
 def _csv(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def _personas(value: str) -> list[str]:
+    return [] if value.strip() in ("none", "") else _csv(value)
 
 
 def _config_path(args: argparse.Namespace) -> Path:
@@ -164,7 +210,7 @@ def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path)
     given = {k: getattr(args, k) for k in keys if getattr(args, k) is not None}
     fresh = config.profile is None
     missing = frozenset() if fresh else _unanswered(path, keys)
-    if missing and args.command in ("apply", "plan") and not given:
+    if missing and args.command in _ONBOARDING and not given:
         # profile.yaml predates a question: ask just that one, keep the other answers.
         tty = onboard.terminal() if not args.yes else None
         profile = onboard.onboard(config, facts, given={}, tty=tty, only=missing)
@@ -174,20 +220,22 @@ def _profile(args: argparse.Namespace, config: Config, facts: Facts, path: Path)
             answers = ", ".join(f"{k}: {getattr(profile, k)}" for k in sorted(missing))
             print(f"note: {path.name} has no answer for {answers} (default, not saved); ./install.sh setup")
         else:
-            onboard.save(path, profile)
+            onboard.save(path, profile, config.user)
         return replace(config, profile=profile)
     if not (fresh or given or args.command == "setup"):
         return config
     if fresh and args.command == "status":
         print(f"note: no {path.name} yet; showing detected defaults (./install.sh setup to choose)")
         return replace(config, profile=onboard.onboard(config, facts, given=given, tty=None))
-    asking = args.command == "setup" or (fresh and args.command in ("apply", "plan"))
+    asking = args.command == "setup" or (fresh and args.command in _ONBOARDING)
     tty = onboard.terminal() if asking and not args.yes else None
     profile = onboard.onboard(config, facts, given=given, tty=tty)
-    onboard.save(path, profile)
+    # Identity is asked with the other questions; a flags-only change keeps what is saved.
+    user = onboard.identity(config, tty, onboard.git_identity()) if asking else config.user
+    onboard.save(path, profile, user)
     if tty is None and fresh:
         print(f"note: wrote {path.name} from detected defaults; edit it or run ./install.sh setup")
-    return replace(config, profile=profile)
+    return replace(config, profile=profile, user=user)
 
 
 def _unanswered(path: Path, keys: list[str]) -> frozenset[str]:
@@ -217,6 +265,9 @@ class Runner:
         self.ctx = ctx
         self.command = args.command
         self.rerun = set(args.rerun)
+        self.applying = self.command in ("apply", "upgrade")
+        if self.command == "upgrade":
+            self.rerun.add("upgrade")  # the one-time apt full-upgrade task
         self.color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 
     def run(self, tasks: list[Task]) -> int:
@@ -227,7 +278,7 @@ class Runner:
         print(self._paint("1", f"dotfiles {self.command}") + f"  {ctx.facts.pretty} · {shells}")
         if ctx.config.profile:
             p = ctx.config.profile
-            extras = [name for name in ("gpu", "docker", "heavy") if getattr(p, name)]
+            extras = [*p.personas, *(name for name in ("gpu", "docker", "heavy") if getattr(p, name))]
             if p.harden != "none":
                 extras.append("harden" if p.harden == "standard" else "harden:aggressive")
             if p.cinnamon and ctx.facts.distro_id == "linuxmint":
@@ -242,6 +293,8 @@ class Runner:
                 continue
             try:
                 did_change = self._run_task(task)
+            except BrokenPipeError:
+                raise  # nobody is reading the output: not a task failure
             except (CommandError, OSError) as exc:  # OSError covers network failures too
                 self._line("!", task.name, str(exc))
                 tail = getattr(exc, "output", "").strip().splitlines()[-25:]
@@ -252,7 +305,7 @@ class Runner:
             changed += did_change
             unchanged += not did_change
 
-        if self.command == "apply":
+        if self.applying:
             ctx.state.save()
             print(f"Done: {changed} changed, {unchanged} unchanged.")
         else:
@@ -271,6 +324,8 @@ class Runner:
             return False
 
         changes = task.plan(ctx)
+        if self.command == "upgrade":
+            changes = [*changes, *task.upgrade(ctx)]
         if not changes:
             self._line("=", task.name, "ok")
         elif self.command == "status":
@@ -279,10 +334,10 @@ class Runner:
             self._line("+", task.name, task.summary if self.command == "plan" else "")
             for change in changes:
                 print(f"      {change.summary}", flush=True)
-                if self.command == "apply":
+                if self.applying:
                     change.apply()
 
-        if self.command == "apply":
+        if self.applying:
             task.commit(ctx)
             if task.once:
                 ctx.state.mark_once(task.name, print_id)

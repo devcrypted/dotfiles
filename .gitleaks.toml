@@ -11,8 +11,10 @@ description = "Email address"
 regex = '''[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'''
 tags = ["pii"]
 [[rules.allowlists]]
-description = "The owner's public commit address, placeholders and service addresses"
+description = "Placeholders and service addresses"
 regexes = [
+  # The owner's public commit address: old commits had it in config.yaml and CI scans
+  # the whole history. It must not appear in any current file except this line.
   '''^kamal2k89@gmail\.com$''',
   '''@example\.(?:com|org|net)$''',
   '''@users\.noreply\.github\.com$''',
@@ -45,6 +47,16 @@ regex = '''\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
 tags = ["pii"]
 [[rules.allowlists]]
 regexes = ['''^0{8}-0{4}-0{4}-0{4}-0{12}$''']
+
+[[rules]]
+id = "pii-home-path"
+description = "Home directory path that names a real user"
+regex = '''(?:/home/|/Users/|[A-Za-z]:\\Users\\)([A-Za-z][A-Za-z0-9._-]*)'''
+secretGroup = 1
+tags = ["pii"]
+[[rules.allowlists]]
+description = "Generic account names used in docs, tests and scripts"
+regexes = ['''^(?:user|u|me|you|username|name|tester|runner|ubuntu|debian|root|Public|Default)$''']
 
 [[rules]]
 id = "pii-phone"

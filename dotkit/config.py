@@ -24,12 +24,14 @@ _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _REPO_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 # Conditions an app's `when` may list; each one is a profile answer (see Profile).
-Condition = Literal["desktop", "server", "heavy", "docker", "gpu"]
+# `persona` holds for an app that one of the machine's selected personas lists.
+Condition = Literal["desktop", "server", "heavy", "docker", "gpu", "persona"]
 HardenLevel = Literal["none", "standard", "aggressive"]  # not "off": YAML reads that as false
 HardenSection = Literal[
     "debloat", "telemetry", "services", "firewall", "kernel", "updates", "desktop", "cleanup"
 ]
 CUDA_PATH = "/usr/local/cuda/bin"
+_SWAP_SIZE = re.compile(r"^(auto|[1-9][0-9]*G)$")
 
 
 class ConfigError(Exception):
@@ -38,6 +40,9 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class User:
+    """Git identity. Personal, so it is never in config.yaml: onboarding asks for it and
+    saves it in this machine's profile.yaml."""
+
     name: str = ""
     email: str = ""
 
@@ -86,6 +91,7 @@ class Profile:
     heavy: bool = True  # apps marked `when: [heavy]`
     harden: HardenLevel = "none"  # scripts/mint/harden.sh; only asked on Linux Mint
     cinnamon: bool = False  # apply desktop/cinnamon/; only asked on a Mint Cinnamon desktop
+    personas: tuple[str, ...] = ()  # names from `personas`: what this machine is used for
 
 
 @dataclass(frozen=True)
@@ -98,6 +104,21 @@ class Deb:
 class Script:
     command: str  # skip the script when this command is already on PATH
     url: str
+    apt: str = ""  # distro package to install instead on releases whose archive has it
+
+
+@dataclass(frozen=True)
+class Persona:
+    """A named toolset for one kind of work (e.g. Node.js development). A machine's
+    profile selects any number of them; `resolve` adds their parts to the base config."""
+
+    about: str = ""  # one line, shown in the onboarding question
+    docker: bool = False  # needs Docker: selecting the persona installs it
+    packages: tuple[str, ...] = ()  # apt packages from the distro archive
+    tools: dict[str, str] = field(default_factory=dict)  # mise tools
+    apps: tuple[str, ...] = ()  # names from `apps` whose `when` lists `persona`
+    modules: tuple[str, ...] = ()  # home/<module>/ to link
+    aliases: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -137,6 +158,14 @@ class Ssh:
 
 
 @dataclass(frozen=True)
+class Swap:
+    """A swap file for machines that have no swap at all (small cloud VMs)."""
+
+    enabled: bool = False
+    size: str = "auto"  # auto (from RAM) or e.g. "4G"
+
+
+@dataclass(frozen=True)
 class Config:
     user: User = field(default_factory=User)
     shells: Shells = field(default_factory=Shells)
@@ -154,12 +183,14 @@ class Config:
     docker: Docker = field(default_factory=Docker)
     nvidia: Nvidia = field(default_factory=Nvidia)
     ssh: Ssh = field(default_factory=Ssh)
+    swap: Swap = field(default_factory=Swap)
     cinnamon: Cinnamon = field(default_factory=Cinnamon)
     harden: Harden = field(default_factory=Harden)
     sudo_nopasswd: bool = False
     pre_commit: bool = True
     blocked_words: tuple[str, ...] = ()
     apps: dict[str, App] = field(default_factory=dict)
+    personas: dict[str, Persona] = field(default_factory=dict)
     profile: Profile | None = None
 
     @property
@@ -196,15 +227,18 @@ def load(
 
 
 def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
-    """Apply the machine profile: keep only the apps whose `when` holds and fold their
-    apt packages, apt repos and mise tools into the matching top-level sections.
+    """Apply the machine profile: add the selected personas, keep only the apps whose
+    `when` holds and fold their apt packages, apt repos and mise tools into the matching
+    top-level sections.
 
     config.yaml says what is allowed on any machine; the profile narrows it, so
     `docker.enabled: false` there still wins over a profile that wants Docker.
     """
     profile = config.profile or Profile()
     gpu = profile.gpu and nvidia_gpu and config.nvidia.enabled is not False
-    docker = config.docker.enabled and profile.docker
+    personas = [config.personas[name] for name in profile.personas]
+    docker = config.docker.enabled and (profile.docker or any(p.docker for p in personas))
+    listed = {name for p in personas for name in p.apps}
     holds = {
         "desktop": profile.role == "desktop",
         "server": profile.role == "server",
@@ -212,9 +246,19 @@ def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
         "docker": docker,
         "gpu": gpu,
     }
-    apps = {name: app for name, app in config.apps.items() if all(holds[c] for c in app.when)}
+    apps = {
+        name: app
+        for name, app in config.apps.items()
+        if all(name in listed if c == "persona" else holds[c] for c in app.when)
+    }
     packages = list(config.packages)
     repos, tools = dict(config.apt_repos), dict(config.tools)
+    modules, aliases = list(config.modules), {}
+    for persona in personas:
+        packages += persona.packages
+        tools.update(persona.tools)
+        modules += persona.modules
+        aliases.update(persona.aliases)
     for name, app in apps.items():
         packages += app.apt
         if app.apt_repo:
@@ -227,6 +271,8 @@ def resolve(config: Config, *, nvidia_gpu: bool) -> Config:
         packages=tuple(dict.fromkeys(packages)),
         apt_repos=repos,
         tools=tools,
+        modules=tuple(dict.fromkeys(modules)),
+        aliases={**aliases, **config.aliases},
         # Servers are reached over SSH: fonts belong on the client's terminal.
         fonts=config.fonts if holds["desktop"] else (),
         docker=replace(config.docker, enabled=docker),
@@ -352,18 +398,10 @@ def _check(config: Config, home_dir: Path | None) -> None:
     if shells.default not in shells.install:
         raise ConfigError(f"shells.default: {shells.default!r} must also be in shells.install")
 
-    for module in config.modules:
-        if module in SHELL_MODULES:
-            raise ConfigError(f"modules: {module!r} is enabled automatically by shells.install; remove it")
-        if home_dir is not None and not (home_dir / module).is_dir():
-            available = sorted(
-                p.name for p in home_dir.iterdir() if p.is_dir() and p.name not in SHELL_MODULES
-            )
-            raise ConfigError(f"modules: no such module {module!r} (available: {', '.join(available)})")
-
-    for name in config.aliases:
-        if not _ALIAS_NAME.match(name):
-            raise ConfigError(f"aliases: invalid alias name {name!r}")
+    _check_modules("modules", config.modules, home_dir)
+    _check_aliases("aliases", config.aliases)
+    if not _SWAP_SIZE.match(config.swap.size):
+        raise ConfigError(f"swap.size: expected auto or a size such as 4G, got {config.swap.size!r}")
     for name in config.env:
         if not _ENV_NAME.match(name):
             raise ConfigError(f"env: invalid variable name {name!r}")
@@ -388,6 +426,52 @@ def _check(config: Config, home_dir: Path | None) -> None:
         clash = sorted(app.mise.keys() & config.tools.keys())
         if clash:
             raise ConfigError(f"{where}.mise: {', '.join(clash)} is also in tools; keep one")
+
+    _check_personas(config, home_dir)
+
+
+def _check_modules(where: str, modules: tuple[str, ...], home_dir: Path | None) -> None:
+    for module in modules:
+        if module in SHELL_MODULES:
+            raise ConfigError(f"{where}: {module!r} is enabled automatically by shells.install; remove it")
+        if home_dir is not None and not (home_dir / module).is_dir():
+            available = sorted(
+                p.name for p in home_dir.iterdir() if p.is_dir() and p.name not in SHELL_MODULES
+            )
+            raise ConfigError(f"{where}: no such module {module!r} (available: {', '.join(available)})")
+
+
+def _check_aliases(where: str, aliases: dict[str, str]) -> None:
+    for name in aliases:
+        if not _ALIAS_NAME.match(name):
+            raise ConfigError(f"{where}: invalid alias name {name!r}")
+
+
+def _check_personas(config: Config, home_dir: Path | None) -> None:
+    versions = {tool: ("tools", version) for tool, version in config.tools.items()}
+    for name, persona in config.personas.items():
+        where = f"personas.{name}"
+        if not _REPO_NAME.match(name):
+            raise ConfigError(f"personas: invalid name {name!r} (use a-z, 0-9 and -)")
+        if name in get_args(Condition):
+            raise ConfigError(f"personas: {name!r} is a `when` condition; pick another name")
+        for app in persona.apps:
+            if app not in config.apps:
+                raise ConfigError(f"{where}.apps: no such app {app!r}")
+            if "persona" not in config.apps[app].when:
+                raise ConfigError(f"apps.{app}.when: add `persona` ({where} lists this app)")
+        _check_modules(f"{where}.modules", persona.modules, home_dir)
+        _check_aliases(f"{where}.aliases", persona.aliases)
+        # Personas combine, so a tool must have one version wherever it is named.
+        for tool, version in persona.tools.items():
+            origin, other = versions.setdefault(tool, (where, version))
+            if other != version:
+                raise ConfigError(f"{tool}: {where} wants {version!r} but {origin} has {other!r}")
+    if config.profile:
+        for name in config.profile.personas:
+            if name not in config.personas:
+                available = ", ".join(config.personas) or "none defined"
+                raise ConfigError(f"profile.personas: no such persona {name!r} (available: {available})")
 
 
 def _join(where: str, key: str) -> str:

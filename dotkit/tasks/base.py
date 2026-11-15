@@ -76,5 +76,10 @@ class Task(ABC):
     @abstractmethod
     def plan(self, ctx: Context) -> list[Change]: ...
 
+    def upgrade(self, ctx: Context) -> list[Change]:
+        """Extra changes for `./install.sh upgrade`: bring what this task installed to its
+        newest version. Runs after ``plan``'s changes; never called by `plan` or `apply`."""
+        return []
+
     def commit(self, ctx: Context) -> None:
         """Record bookkeeping after a successful apply (runs even with no changes)."""

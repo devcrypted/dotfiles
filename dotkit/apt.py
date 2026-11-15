@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
@@ -29,6 +30,12 @@ def apt_status(line: str) -> tuple[float | None, str] | None:
             return None
         return fraction, ("Downloading: " if kind == "dlstatus" else "") + text
     return None, line
+
+
+def has_remote_source(policy: str) -> bool:
+    """True when `apt-cache policy` output lists a repository (not just the local dpkg
+    status) for the package, i.e. apt upgrades will keep it current."""
+    return re.search(r"^\s+-?\d+ https?://", policy, re.M) is not None
 
 
 class Apt:
@@ -63,16 +70,20 @@ class Apt:
         policy = output(["apt-cache", "policy", package])
         return "Candidate:" in policy and "Candidate: (none)" not in policy
 
+    @staticmethod
+    def repo_managed(package: str) -> bool:
+        return has_remote_source(output(["apt-cache", "policy", package]))
+
     def update(self) -> None:
         self.drop_duplicates()
         run(["apt-get", "update"], root=True)
         self._fresh = True
 
-    def install(self, packages: Iterable[str]) -> None:
+    def install(self, packages: Iterable[str], reinstall: bool = False) -> None:
         if not self._fresh:
             self.update()
         run(
-            ["apt-get", *STATUS_FD, "install", "-y", *packages],
+            ["apt-get", *STATUS_FD, "install", "-y", *(["--reinstall"] if reinstall else []), *packages],
             root=True,
             env=_NONINTERACTIVE,
             progress=apt_status,

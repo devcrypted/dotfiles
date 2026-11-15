@@ -104,3 +104,12 @@ def test_cloud_keeps_an_existing_local_overlay(tmp_path, monkeypatch):
     (tmp_path / "config.local.yaml").write_text("upgrade: true")
     with pytest.raises(ConfigError, match="already exists"):
         cli._use_cloud_overlay(tmp_path / "config.yaml")
+
+
+def test_a_closed_output_pipe_is_not_reported_as_a_task_failure(make_ctx):
+    class Quiet(Counter):
+        def plan(self, ctx):
+            raise BrokenPipeError
+
+    with pytest.raises(BrokenPipeError):
+        cli.Runner(make_ctx(), _args("plan")).run([Quiet("a")])

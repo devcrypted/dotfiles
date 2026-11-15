@@ -1,19 +1,47 @@
-# Checks on every `git commit`. ./install.sh installs them (the `hooks` task).
+# Checks on every `git commit` and `git push`. ./install.sh installs them (the `hooks` task).
 # Run everything by hand: pre-commit run --all-files
 # A false positive from gitleaks: end the line with `# gitleaks:allow`, or extend .gitleaks.toml.
+#
+# Three git hooks, so a secret has to get past all of them to reach GitHub:
+#   pre-commit   every check below, on the staged files; formatters rewrite the file
+#   commit-msg   secrets, PII and blocked words in the commit message
+#   pre-push     secrets and PII in every commit about to be pushed (catches commits
+#                made with --no-verify or before the hooks were installed)
+# CI runs the same hooks with the same versions, plus `gitleaks-history`.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit] # only the secret checks opt in to the other two stages
 repos:
   # --- Secrets and personal data -------------------------------------------------
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
       - id: gitleaks # secrets (default rules) + PII rules from .gitleaks.toml
+      - id: gitleaks
+        alias: gitleaks-message
+        name: secrets and PII in the commit message
+        stages: [commit-msg]
+        entry: bash -c 'gitleaks stdin --config .gitleaks.toml --redact --no-banner <"$1"' --
+        pass_filenames: true
+      - id: gitleaks
+        alias: gitleaks-push
+        name: secrets and PII in the commits being pushed
+        stages: [pre-push]
+        # A first push of a whole repository has no FROM ref: scan everything up to TO.
+        entry: >-
+          bash -c 'gitleaks git --config .gitleaks.toml --redact --no-banner
+          --log-opts="${PRE_COMMIT_FROM_REF:+$PRE_COMMIT_FROM_REF..}${PRE_COMMIT_TO_REF:-HEAD}"'
+      - id: gitleaks
+        alias: gitleaks-history
+        name: secrets and PII in the whole history
+        stages: [manual] # CI: pre-commit run --hook-stage manual gitleaks-history
+        entry: gitleaks git --config .gitleaks.toml --redact --no-banner
   - repo: local
     hooks:
       - id: forbidden-files
-        name: forbidden files (keys, credentials, local config)
+        name: forbidden files (keys, credentials, machine-local config)
         language: fail
         entry: these files must never be committed
-        files: (?i)(^|/)(config\.local\.yaml|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
+        files: (?i)(^|/)(config\.local\.yaml|profile\.yaml|profile\.json|config\.json|settings\.local\.json|\.env(\.[^/]*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|kdbx|ovpn)|hosts\.yml|credentials(\.json)?|\.netrc|\.pgpass)$
       - id: blocked-words
         name: blocked words (blocked_words in config.local.yaml)
         # Own venv: `python3` on PATH may be a mise/pyenv build without PyYAML.
@@ -21,6 +49,7 @@ repos:
         additional_dependencies: [pyyaml]
         entry: python -m dotkit.hooks
         types: [text]
+        stages: [pre-commit, commit-msg]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -61,7 +90,7 @@ repos:
       - id: fish-indent
         name: fish_indent
         language: system
-        entry: fish_indent --check
+        entry: fish_indent --write
         types: [fish]
       - id: zsh-syntax
         name: zsh -n
@@ -69,11 +98,39 @@ repos:
         entry: zsh -n
         types: [zsh]
 
+  # --- PowerShell (Windows installer) ---------------------------------------------
+  # Needs pwsh (the `azure` persona or the GitHub runner has it); the modules are
+  # installed on first use.
+  - repo: local
+    hooks:
+      - id: psscriptanalyzer
+        name: PSScriptAnalyzer
+        language: system
+        types: [powershell]
+        pass_filenames: false
+        entry: >-
+          pwsh -NoProfile -Command "
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser };
+          $issues = Invoke-ScriptAnalyzer -Path windows -Recurse -ExcludeRule PSAvoidUsingWriteHost;
+          $issues | Format-Table -AutoSize | Out-String | Write-Host;
+          if ($issues) { exit 1 }"
+      - id: pester
+        name: Pester (Windows package selection)
+        language: system
+        types: [powershell]
+        pass_filenames: false
+        entry: >-
+          pwsh -NoProfile -Command "
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -ge 5.5)) { Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser };
+          $r = Invoke-Pester tests/windows -Output Minimal -PassThru;
+          if ($r.FailedCount) { exit 1 }"
+
   # --- Docs ------------------------------------------------------------------------
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: v0.2.78
     hooks:
-      - id: rumdl # markdownlint rules; config in .markdownlint.yaml
+      - id: rumdl-fmt # fixes what it can; config in .markdownlint.yaml
+      - id: rumdl # reports what is left
 
   # --- Tests -----------------------------------------------------------------------
   - repo: local

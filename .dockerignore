@@ -1,5 +1,6 @@
 # Machine-local files must never reach test images.
 config.local.yaml
+profile.yaml
 /.bashrc
 /.zshrc
 /.gitconfig

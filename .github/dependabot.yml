@@ -1,0 +1,10 @@
+# Keeps the pinned versions current: CI actions (pinned by commit) and the commit-check
+# tools in .pre-commit-config.yaml.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: monthly}
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule: {interval: monthly}

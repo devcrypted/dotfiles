@@ -25,7 +25,7 @@ They run again when their config section changes or with `--rerun <task>`.
 | `nvidia` | one-time | When the profile says yes to the GPU and an NVIDIA GPU is present (and not WSL): installs the open or proprietary driver (`ubuntu-drivers` on Ubuntu/Mint, the CUDA repo on Debian) unless a driver of that flavor is already running or installed, plus `nvidia-container-toolkit` registered with Docker when Docker is installed. |
 | `cuda` | always | Same conditions, WSL included, with `nvidia.cuda: true`: installs `cuda-toolkit` from NVIDIA's repo for this release and puts `/usr/local/cuda/bin` on `PATH`. Skipped when any working `nvcc` exists, however it was installed. An interrupted install is finished from the packages already downloaded instead of starting over, and every install is checked by running `nvcc --version`. |
 | `ssh` | one-time | Creates `~/.ssh/id_ed25519` if it doesn't exist. |
-| `sudo` | always | `sudo_nopasswd: true` adds a `visudo`-validated `/etc/sudoers.d/90-dotfiles`; switching it back to `false` removes it. |
+| `sudo` | always | Off by default. `sudo_nopasswd: true` (set it per machine in `config.local.yaml`) adds a `visudo`-validated `/etc/sudoers.d/90-dotfiles`; switching it back to `false` removes it. |
 | `harden` | one-time | Linux Mint only, when the profile's `harden` answer is `standard` or `aggressive`: runs [`scripts/mint/harden.sh`](scripts/mint/harden.sh). It purges unused preinstalled apps (never one apt would take Mint or Cinnamon down with) and crash reporters, stops network discovery services, hardens sshd, turns on ufw, applies kernel/network sysctl hardening, turns off core dumps, enables automatic updates and cleans caches and logs. `harden.skip` in `config.yaml` leaves sections alone. Runs again when the answer, the skip list or the script changes. |
 
 ## Machine profile
@@ -74,7 +74,17 @@ All three shells are set up the same way, with no framework:
 
 ## Commit checks (`.pre-commit-config.yaml`)
 
-Every `git commit` in this repo runs the following. If any check fails, the commit is refused.
+Three git hooks guard this repo, so a secret has to get past all of them to reach GitHub:
+
+| Hook | Runs | Checks |
+| --- | --- | --- |
+| `pre-commit` | on `git commit`, over the staged files | Everything listed below. Formatters rewrite the file, so you only re-stage. |
+| `commit-msg` | on `git commit`, over the message | Secrets, personal data and blocked words. |
+| `pre-push` | on `git push`, over every commit being pushed | Secrets and personal data. Catches commits made with `--no-verify` or before the hooks were installed, while they are still only on your machine. |
+
+CI runs the same hooks with the same pinned versions, then scans the whole history.
+Hooks can be skipped on a laptop, so also keep GitHub's **Secret scanning** and **Push
+protection** on (Settings → Code security): that check cannot be bypassed locally.
 
 - **Secrets:** [gitleaks](https://github.com/gitleaks/gitleaks) with its full default rule
   set, plus `detect-private-key`, and a list of file names that are never allowed
@@ -86,10 +96,12 @@ Every `git commit` in this repo runs the following. If any check fails, the comm
 - **Blocked words:** anything in `blocked_words` (set it in `config.local.yaml`, e.g. an
   employer's or client's name) may never appear in a committed file.
 - **Quality:** ruff (lint + format), shellcheck, shfmt, fish_indent, `zsh -n`,
-  markdownlint, YAML/JSON/TOML validity, whitespace and line-ending fixes, large-file guard,
+  markdownlint (rumdl), YAML/JSON/TOML validity, whitespace and line-ending fixes, large-file guard,
   and the unit tests.
 
-`pre-commit run --all-files` runs everything by hand.
+ruff, shfmt, fish_indent, rumdl and the whitespace fixers fix what they find and stop
+the commit once; stage the result and commit again. `pre-commit run --all-files` runs
+everything by hand.
 
 ## Design notes
 

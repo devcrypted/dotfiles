@@ -88,9 +88,12 @@ phone numbers, hostnames, public IPs, account or tenant IDs, tokens, keys or pas
 - If a tool mixes settings and secrets in one file, adopt only the settings file, or
   keep the secret part in an untracked file the tool can include (many support an
   `include` directive, like `~/.gitconfig` does here).
-- Every commit is scanned by gitleaks (default secret rules plus the PII rules in
-  `.gitleaks.toml`), a forbidden-files check and your `blocked_words`; CI repeats the
-  scan over the whole history. See [FEATURES.md](FEATURES.md#commit-checks-pre-commit-configyaml).
+- Every commit, commit message and push is scanned by gitleaks (default secret rules
+  plus the PII rules in `.gitleaks.toml`), a forbidden-files check and your
+  `blocked_words`; CI repeats it over the whole history. See
+  [FEATURES.md](FEATURES.md#commit-checks-pre-commit-configyaml).
+- Put your own name, employer and client names in `blocked_words` in
+  `config.local.yaml`: no pattern can recognise a bare name, that list can.
 - On GitHub, keep **Secret scanning** and **Push protection** turned on (Settings →
   Code security). They are free for public repos and catch what a skipped hook misses.
 - A secret that was pushed is compromised even after a force-push: rotate it first.
@@ -189,4 +192,4 @@ docker build -f tests/e2e/Dockerfile -t dotfiles-e2e . && docker run --rm dotfil
 
 The end-to-end test installs into a fresh container, checks that a second run makes
 zero changes, then edits the config and checks that only those changes are applied.
-CI runs it on Ubuntu 24.04 and Debian 12.
+CI runs it on Ubuntu 24.04 and 26.04 and Debian 12 and 13.

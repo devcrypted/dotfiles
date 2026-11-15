@@ -169,7 +169,9 @@ apps:
     when: [desktop]
     script:
       command: ghostty
-      url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh
+      # Pinned to a reviewed commit (it runs with sudo). To update: read the new
+      # install.sh, then replace the commit id.
+      url: https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/b59efb59315d98fcf6b0b4ae1640865903e436dc/install.sh
       apt: ghostty
   bitwarden: # password manager; no apt repo, so `./install.sh upgrade` refetches the .deb
     when: [desktop]
@@ -262,6 +264,6 @@ nvidia:
   cuda: true # CUDA toolkit from NVIDIA's repo (on WSL too)
 ssh:
   generate_key: true # ~/.ssh/id_ed25519 if missing
-sudo_nopasswd: true
-pre_commit: true # install this repo's commit checks (secrets, PII, lint)
+sudo_nopasswd: false # true: sudo never asks for a password (set it per machine in config.local.yaml)
+pre_commit: true # install this repo's commit and push checks (secrets, PII, lint)
 # blocked_words: [...]       # words commits may never contain; set in config.local.yaml

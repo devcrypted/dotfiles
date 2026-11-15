@@ -109,6 +109,11 @@ if ($Setup -or $missing) {
 }
 
 # --- Apps --------------------------------------------------------------------------
+if (-not $SkipApps -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    # Fresh VMs and Windows Server images can lack winget; the rest still runs.
+    Write-Warning 'winget was not found, so apps are skipped. Install "App Installer" from the Microsoft Store (or update Windows), then run this again.'
+    $SkipApps = $true
+}
 if (-not $SkipApps) {
     if (-not $PackagesFile) { $PackagesFile = Get-RepoFile 'packages.json' }
     if ($skipApps -or $extraApps) {

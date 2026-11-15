@@ -51,8 +51,19 @@ printf 'token = ghp_%s\n' "$(python3 -c 'import secrets; print(secrets.token_hex
 git add -A
 if git commit -qm "should be refused" >/tmp/commit 2>&1; then fail "commit with a secret was accepted"; fi
 grep -q "Detect hardcoded secrets.*Failed" /tmp/commit || fail "gitleaks did not report the secret"
-git rm -q --cached leak.txt && rm leak.txt
-pass "pre-commit hooks installed and block secrets"
+git rm -q --cached leak.txt
+# A token in the commit message is refused too.
+if git commit -q --allow-empty -m "use $(cut -d' ' -f3 leak.txt)" >/tmp/commit 2>&1; then
+  fail "commit message with a secret was accepted"
+fi
+grep -q "commit message.*Failed" /tmp/commit || fail "the commit-msg hook did not report the secret"
+# A commit that skipped the hooks is stopped when it is pushed.
+git init -q --bare /tmp/remote.git
+git add leak.txt && git commit -qm "skipped the hooks" --no-verify
+if git push -q /tmp/remote.git HEAD:refs/heads/e2e >/tmp/push 2>&1; then fail "push with a secret was accepted"; fi
+grep -q "commits being pushed.*Failed" /tmp/push || fail "the pre-push hook did not report the secret"
+git reset -q --hard HEAD~1
+pass "commit, commit-msg and pre-push hooks installed and block secrets"
 
 fish -i -c 'abbr -q kgp; and type -q starship; and type -q z' 2>/dev/null || fail "fish setup"
 zsh -i -c 'alias g >/dev/null && whence starship >/dev/null && echo secret42 | mask cat | grep -qx "\*\*\*\*"' \

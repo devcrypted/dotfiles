@@ -21,7 +21,11 @@ from .progress import Progress, size
 # they update the bar but are left out of the output kept for error messages.
 Parser = Callable[[str], "tuple[float | None, str] | None"]
 
-_DEBIAN_VERSIONS = {"bullseye": "11", "bookworm": "12", "trixie": "13"}
+# Debian codename -> major version, for vendor repos that are named by number.
+DEBIAN_RELEASES = {"bullseye": "11", "bookworm": "12", "trixie": "13", "forky": "14"}
+# What a Debian derivative without an upstream codename (Kali and other rolling
+# releases) is treated as: vendor repos publish for stable releases only.
+DEBIAN_STABLE = "trixie"
 _ARCHES = {"x86_64": "amd64", "aarch64": "arm64"}
 
 verbose = False
@@ -217,15 +221,23 @@ def detect(os_release: Path = Path("/etc/os-release")) -> Facts:
             f"unsupported distro {info.get('ID', 'unknown')!r}: only Debian and Ubuntu "
             "(including derivatives such as Mint and WSL Ubuntu) are supported"
         )
+    version = ""
     if family == "ubuntu":
         codename = info.get("UBUNTU_CODENAME") or info.get("VERSION_CODENAME", "")
     else:
         codename = info.get("DEBIAN_CODENAME") or info.get("VERSION_CODENAME", "")
+        release = info.get("VERSION_ID", "").split(".")[0]
+        if codename in DEBIAN_RELEASES:
+            version = DEBIAN_RELEASES[codename]
+        elif info.get("ID") == "debian" and codename and release:
+            version = release  # a Debian release newer than the table above
+        else:
+            codename, version = DEBIAN_STABLE, DEBIAN_RELEASES[DEBIAN_STABLE]
     return Facts(
         distro=family,
         distro_id=info.get("ID", family),
         codename=codename,
-        version=_DEBIAN_VERSIONS.get(codename, "") if family == "debian" else "",
+        version=version,
         arch=output(["dpkg", "--print-architecture"]).strip()
         or _ARCHES.get(platform.machine(), platform.machine()),
         user=pwd.getpwuid(os.getuid()).pw_name,

@@ -13,7 +13,7 @@ default_stages: [pre-commit] # only the secret checks opt in to the other two st
 repos:
   # --- Secrets and personal data -------------------------------------------------
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
+    rev: v8.30.1
     hooks:
       - id: gitleaks # secrets (default rules) + PII rules from .gitleaks.toml
       - id: gitleaks
